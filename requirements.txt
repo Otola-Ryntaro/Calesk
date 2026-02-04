@@ -5,3 +5,9 @@ Pillow==10.4.0
 plyer==2.1.0
 schedule==1.2.0
 python-dotenv==1.0.0
+
+# GUI Framework (Phase 8)
+PyQt6==6.6.1
+
+# Testing
+pytest-qt==4.2.0

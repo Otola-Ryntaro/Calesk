@@ -157,12 +157,13 @@ viewmodels/     # ビジネスロジック（UI ↔ Core の橋渡し）
 
 ## 実装計画
 
-### Phase 1: 環境構築とアーキテクチャ基盤
-- [ ] PyQt6のインストール（requirements.txt更新）
-- [ ] MVVMディレクトリ構造の作成（ui/, viewmodels/）
-- [ ] 基本的なViewModelベースクラスの実装
-- [ ] WallpaperServiceの実装（core/との連携）
-- [ ] pytest-qtのセットアップ
+### Phase 1: 環境構築とアーキテクチャ基盤 ✅
+- [x] PyQt6のインストール（requirements.txt更新）
+- [x] MVVMディレクトリ構造の作成（ui/, viewmodels/）
+- [x] 基本的なViewModelベースクラスの実装
+- [x] WallpaperServiceの実装（core/との連携）
+- [x] pytest-qtのセットアップ
+- [x] Codexコードレビュー実施（評価: good, スコア: 7/10）
 
 ### Phase 2: メインウィンドウとプレビュー
 - [ ] MainWindowの作成（PyQt6）
