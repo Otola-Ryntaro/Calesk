@@ -200,13 +200,19 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
 
 **実装タスク**:
 - [ ] MainWindow テストで ViewModel モックを注入
-- [ ] `waitSignal` タイムアウトの明示的処理
+- [x] `waitSignal` タイムアウトの明示的処理 ✅ **2026-02-05完了**
 - [ ] エッジケーステストの追加
 - [ ] カバレッジ 90% 以上を目標
 
+**実装内容（完了分）**:
+- ✅ `pytest.raises(Exception)`を`pytest.raises(TimeoutError)`に明示化
+- ✅ `from pytestqt.exceptions import TimeoutError`追加
+- ✅ 全106テスト合格
+- ✅ コードレビュー: 10/10 APPROVED
+
 **ファイル**:
 - `tests/test_main_window.py`
-- `tests/test_main_viewmodel.py`
+- `tests/test_main_viewmodel.py` ✅ **更新完了**
 - `tests/test_preview_widget.py`
 
 #### 8. UI状態の一貫性
