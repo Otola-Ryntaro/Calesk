@@ -25,8 +25,17 @@ from .config import (
     HOUR_HEIGHT, DAY_COLUMN_WIDTH,
     FONT_SIZE_HOUR_LABEL, FONT_SIZE_DAY_HEADER, FONT_SIZE_EVENT_BLOCK,
     # 背景画像設定
-    BACKGROUND_IMAGE_PATH
+    BACKGROUND_IMAGE_PATH,
+    # Google Calendar アイコン設定
+    CALENDAR_ICON_PATH, CALENDAR_ICON_SIZE,
+    ICON_MAC_POSITION, ICON_WINDOWS_POSITION, ICON_LINUX_POSITION,
+    # テーマ設定
+    THEME,
+    # マルチディスプレイ設定
+    WALLPAPER_TARGET_DESKTOP, AUTO_DETECT_RESOLUTION
 )
+from . import themes
+from .display_info import DisplayInfo
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +45,17 @@ class ImageGenerator:
 
     def __init__(self):
         self.system = platform.system()
+
+        # 解像度の自動検出
+        if AUTO_DETECT_RESOLUTION and WALLPAPER_TARGET_DESKTOP > 0:
+            display_info = DisplayInfo()
+            self.width, self.height = display_info.get_target_display_resolution(WALLPAPER_TARGET_DESKTOP)
+            logger.info(f"解像度を自動検出しました: {self.width}x{self.height}")
+        else:
+            self.width = IMAGE_WIDTH
+            self.height = IMAGE_HEIGHT
+            logger.info(f"デフォルト解像度を使用: {self.width}x{self.height}")
+
         # 各種フォントを読み込み
         self.font_card_date = self._get_font(FONT_SIZE_CARD_DATE)
         self.font_card_time = self._get_font(FONT_SIZE_CARD_TIME)
@@ -47,6 +67,9 @@ class ImageGenerator:
 
         # レイアウト計算（動的）
         self.layout = self._calculate_layout()
+
+        # テーマ初期化
+        self.theme = themes.get_theme(THEME)
 
     def _get_font(self, size: int) -> ImageFont.FreeTypeFont:
         """システムに応じた日本語フォントを取得"""
@@ -79,11 +102,8 @@ class ImageGenerator:
         # 時間範囲
         total_hours = WEEK_CALENDAR_END_HOUR - WEEK_CALENDAR_START_HOUR + 1
 
-        # カレンダー用の残り高さを計算
-        remaining_height = IMAGE_HEIGHT - desktop_h - card_h - spacing_top - spacing_middle - header_h
-
-        # 1時間あたりの高さ（動的）
-        hour_height = remaining_height // total_hours
+        # 1時間あたりの高さ（固定値を使用、視認性より高さ削減優先）
+        hour_height = HOUR_HEIGHT
 
         # 実際のカレンダー高さ
         calendar_height = hour_height * total_hours
@@ -102,6 +122,142 @@ class ImageGenerator:
             'header_height': header_h
         }
 
+    def set_theme(self, theme_name: str):
+        """
+        テーマを切り替える
+
+        Args:
+            theme_name: テーマ名（'simple', 'fancy', 'stylish'）
+        """
+        self.theme = themes.get_theme(theme_name)
+        logger.info(f"テーマを '{theme_name}' に切り替えました")
+
+    def _create_gradient_background(self, gradient_colors: List[Tuple[int, int, int]]) -> Image.Image:
+        """
+        グラデーション背景画像を生成（Fancy用）
+
+        Args:
+            gradient_colors: グラデーションカラーのリスト [(R,G,B), (R,G,B), ...]
+
+        Returns:
+            Image.Image: グラデーション背景画像
+        """
+        if len(gradient_colors) < 2:
+            raise ValueError("グラデーションには最低2色必要です")
+
+        # 新しい画像を作成
+        img = Image.new('RGB', (self.width, self.height))
+
+        # 開始色と終了色
+        start_color = gradient_colors[0]
+        end_color = gradient_colors[1]
+
+        # 垂直グラデーション（上から下へ）
+        for y in range(self.height):
+            # 現在の位置の割合（0.0〜1.0）
+            ratio = y / self.height
+
+            # 色を補間
+            r = int(start_color[0] + (end_color[0] - start_color[0]) * ratio)
+            g = int(start_color[1] + (end_color[1] - start_color[1]) * ratio)
+            b = int(start_color[2] + (end_color[2] - start_color[2]) * ratio)
+
+            # 1行分の色で塗りつぶし
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([(0, y), (self.width, y + 1)], fill=(r, g, b))
+
+        return img
+
+    def _draw_rounded_rectangle(
+        self,
+        draw: ImageDraw.ImageDraw,
+        xy: List[Tuple[int, int]],
+        radius: int,
+        fill: Optional[Tuple[int, ...]] = None,
+        outline: Optional[Tuple[int, ...]] = None,
+        width: int = 1
+    ):
+        """
+        角丸矩形を描画（Fancy用）
+
+        Args:
+            draw: ImageDrawオブジェクト
+            xy: 矩形の座標 [(x1, y1), (x2, y2)]
+            radius: 角丸の半径
+            fill: 塗りつぶし色（RGBA対応）
+            outline: 枠線色
+            width: 枠線の幅
+        """
+        x1, y1 = xy[0]
+        x2, y2 = xy[1]
+
+        # 角丸矩形を描画
+        draw.rounded_rectangle(
+            [(x1, y1), (x2, y2)],
+            radius=radius,
+            fill=fill,
+            outline=outline,
+            width=width
+        )
+
+    def _get_icon_position(self) -> Tuple[int, int]:
+        """
+        OS別のアイコン配置座標を取得（動的解像度対応）
+
+        Returns:
+            Tuple[int, int]: (x, y) 座標
+        """
+        if self.system == 'Darwin':  # Mac: 上部右寄せ
+            return (self.width - 60, 20)
+        elif self.system == 'Windows':  # Windows: 右下
+            return (self.width - 60, self.height - 60)
+        else:  # Linux その他: Mac同様
+            return (self.width - 60, 20)
+
+    def _get_icon_size(self) -> Tuple[int, int]:
+        """
+        アイコンサイズを取得
+
+        Returns:
+            Tuple[int, int]: (width, height)
+        """
+        return CALENDAR_ICON_SIZE
+
+    def _draw_calendar_icon(self, draw: ImageDraw.ImageDraw):
+        """
+        Google Calendarアイコンを描画
+
+        Args:
+            draw: ImageDrawオブジェクト
+        """
+        try:
+            # アイコン画像を読み込み
+            if CALENDAR_ICON_PATH and Path(CALENDAR_ICON_PATH).exists():
+                icon_img = Image.open(CALENDAR_ICON_PATH)
+
+                # サイズ調整（必要に応じて）
+                icon_size = self._get_icon_size()
+                if icon_img.size != icon_size:
+                    icon_img = icon_img.resize(icon_size, Image.Resampling.LANCZOS)
+
+                # 配置位置を取得
+                x, y = self._get_icon_position()
+
+                # アイコンを貼り付け（透過対応）
+                if icon_img.mode == 'RGBA':
+                    # 透過画像の場合
+                    draw._image.paste(icon_img, (x, y), icon_img)
+                else:
+                    # 不透明画像の場合
+                    draw._image.paste(icon_img, (x, y))
+
+                logger.debug(f"アイコンを配置しました: ({x}, {y})")
+            else:
+                logger.warning(f"アイコン画像が見つかりません: {CALENDAR_ICON_PATH}")
+
+        except Exception as e:
+            logger.error(f"アイコン描画エラー: {e}", exc_info=True)
+
     def generate_wallpaper(
         self,
         today_events: List[Dict],
@@ -109,23 +265,32 @@ class ImageGenerator:
     ) -> Optional[Path]:
         """壁紙画像を生成"""
         try:
-            # 背景画像の読み込みまたは透明背景の作成
-            if BACKGROUND_IMAGE_PATH and Path(BACKGROUND_IMAGE_PATH).exists():
-                # 背景画像を読み込んでリサイズ
+            # テーマに応じた背景生成
+            if 'background_gradient' in self.theme and self.theme['background_gradient']:
+                # グラデーション背景（Fancy用）
+                logger.info("グラデーション背景を生成します")
+                image = self._create_gradient_background(self.theme['background_gradient'])
+            elif self.theme.get('background_color'):
+                # 単色背景
+                bg_color = self.theme['background_color']
+                logger.info(f"単色背景を生成します: {bg_color}")
+                image = Image.new('RGB', (self.width, self.height), bg_color)
+            elif BACKGROUND_IMAGE_PATH and Path(BACKGROUND_IMAGE_PATH).exists():
+                # 背景画像を読み込んでリサイズ（後方互換性）
                 logger.info(f"背景画像を読み込んでいます: {BACKGROUND_IMAGE_PATH}")
                 background = Image.open(BACKGROUND_IMAGE_PATH)
-                background = background.resize((IMAGE_WIDTH, IMAGE_HEIGHT), Image.Resampling.LANCZOS)
+                background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
                 # RGBモードに変換（透明度を削除）
                 if background.mode == 'RGBA':
-                    rgb_background = Image.new('RGB', (IMAGE_WIDTH, IMAGE_HEIGHT), (255, 255, 255))
+                    rgb_background = Image.new('RGB', (self.width, self.height), (255, 255, 255))
                     rgb_background.paste(background, mask=background.split()[3])
                     image = rgb_background
                 else:
                     image = background.convert('RGB')
             else:
-                # 透明背景
-                logger.info("透明背景で画像を生成します")
-                image = Image.new('RGBA', (IMAGE_WIDTH, IMAGE_HEIGHT), (255, 255, 255, 0))
+                # デフォルト背景（白）
+                logger.info("デフォルト背景を生成します")
+                image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
 
             draw = ImageDraw.Draw(image)
 
@@ -138,6 +303,9 @@ class ImageGenerator:
 
             # 週間カレンダー描画
             self._draw_week_calendar(draw, week_events, week_calendar_y_start)
+
+            # Google Calendarアイコン描画
+            self._draw_calendar_icon(draw)
 
             # 画像を保存
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -187,7 +355,7 @@ class ImageGenerator:
 
         # カードを中央に配置
         total_width = CARD_WIDTH * 3 + CARD_MARGIN * 2
-        start_x = (IMAGE_WIDTH - total_width) // 2
+        start_x = (self.width - total_width) // 2
 
         cards = [
             ('今日の予定', events_by_day['today'], start_x),
@@ -207,20 +375,38 @@ class ImageGenerator:
         y: int
     ):
         """個別の予定カードを描画"""
-        # カード背景（白塗り + 薄いグレーの枠）
-        draw.rectangle(
-            [(x, y), (x + CARD_WIDTH, y + CARD_HEIGHT)],
-            fill=(255, 255, 255, 255),
-            outline=(200, 200, 200),
-            width=2
-        )
+        # テーマから色と角丸設定を取得
+        card_bg = self.theme.get('card_bg', (255, 255, 255))
+        card_border = self.theme.get('card_border', (200, 200, 200))
+        card_radius = self.theme.get('card_radius', 0)
+        text_color = self.theme.get('text_color', (0, 0, 0))
+
+        # カード背景（テーマに応じて角丸または通常の矩形）
+        if card_radius > 0:
+            # 角丸矩形（Fancy/Stylish用）
+            self._draw_rounded_rectangle(
+                draw,
+                [(x, y), (x + CARD_WIDTH, y + CARD_HEIGHT)],
+                radius=card_radius,
+                fill=card_bg,
+                outline=card_border,
+                width=2
+            )
+        else:
+            # 通常の矩形（Simple用）
+            draw.rectangle(
+                [(x, y), (x + CARD_WIDTH, y + CARD_HEIGHT)],
+                fill=card_bg,
+                outline=card_border,
+                width=2
+            )
 
         # 日付ラベル
         draw.text(
             (x + CARD_PADDING, y + CARD_PADDING),
             label,
             font=self.font_card_date,
-            fill=TEXT_COLOR
+            fill=text_color
         )
 
         current_y = y + CARD_PADDING + FONT_SIZE_CARD_DATE + 10
@@ -261,7 +447,7 @@ class ImageGenerator:
                     (text_x, current_y),
                     time_text,
                     font=self.font_card_time,
-                    fill=TEXT_COLOR
+                    fill=text_color
                 )
 
                 # タイトル
@@ -272,7 +458,7 @@ class ImageGenerator:
                     (text_x, current_y + FONT_SIZE_CARD_TIME + 2),
                     title,
                     font=self.font_card_title,
-                    fill=TEXT_COLOR
+                    fill=text_color
                 )
 
                 # 場所（スペースがあれば）
@@ -280,11 +466,13 @@ class ImageGenerator:
                     location = event['location']
                     if len(location) > 15:
                         location = location[:15] + '...'
+                    # 場所は少し薄めの色で表示
+                    location_color = tuple(min(c + 50, 255) for c in text_color[:3])
                     draw.text(
                         (text_x, current_y + FONT_SIZE_CARD_TIME + FONT_SIZE_CARD_TITLE + 4),
                         f"@ {location}",
                         font=self.font_card_location,
-                        fill=(100, 100, 100)
+                        fill=location_color
                     )
 
                 current_y += event_height
@@ -306,9 +494,14 @@ class ImageGenerator:
         y_start: int
     ):
         """週間カレンダーを描画"""
+        # テーマから色を取得
+        text_color = self.theme.get('text_color', (0, 0, 0))
+        grid_color = self.theme.get('grid_color', (220, 220, 220))
+        card_bg = self.theme.get('card_bg', (255, 255, 255))
+
         # カレンダーの幅と開始位置
         total_width = DAY_COLUMN_WIDTH * 7
-        start_x = (IMAGE_WIDTH - total_width) // 2
+        start_x = (self.width - total_width) // 2
 
         # 動的レイアウト値を使用
         hour_height = self.layout['hour_height']
@@ -342,7 +535,7 @@ class ImageGenerator:
                 (x_pos, y_start),
                 date_str,
                 font=self.font_day_header,
-                fill=TEXT_COLOR,
+                fill=text_color,
                 align='center'
             )
 
@@ -350,10 +543,15 @@ class ImageGenerator:
         header_height = self.layout['header_height']
         grid_y_start = self.layout['grid_y_start']
 
-        # カレンダーグリッドの白背景
+        # カレンダーグリッドの背景（テーマに応じた色）
+        # card_bgがRGBAの場合、RGBのみ使用
+        if isinstance(card_bg, tuple) and len(card_bg) == 4:
+            grid_bg = card_bg[:3]  # RGB部分のみ
+        else:
+            grid_bg = card_bg
         draw.rectangle(
             [(start_x, grid_y_start), (start_x + total_width, grid_y_start + calendar_height)],
-            fill=(255, 255, 255, 255)
+            fill=grid_bg
         )
 
         # グリッド線（横線：時間軸）
@@ -361,7 +559,7 @@ class ImageGenerator:
             y = grid_y_start + hour * hour_height
             draw.line(
                 [(start_x, y), (start_x + total_width, y)],
-                fill=(220, 220, 220),
+                fill=grid_color,
                 width=1
             )
 
@@ -372,7 +570,7 @@ class ImageGenerator:
                     (start_x - 45, y + 5),
                     f"{hour_value:02d}:00",
                     font=self.font_hour_label,
-                    fill=(120, 120, 120)
+                    fill=text_color
                 )
 
         # グリッド線（縦線：曜日）
@@ -380,7 +578,7 @@ class ImageGenerator:
             x = start_x + i * DAY_COLUMN_WIDTH
             draw.line(
                 [(x, grid_y_start), (x, grid_y_start + calendar_height)],
-                fill=(220, 220, 220),
+                fill=grid_color,
                 width=1
             )
 

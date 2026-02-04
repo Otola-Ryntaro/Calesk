@@ -8,6 +8,7 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Optional
+from . import config
 
 logger = logging.getLogger(__name__)
 
@@ -118,11 +119,27 @@ class WallpaperSetter:
             safe_path = str(image_path).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
 
             # osascriptでAppleScriptを実行
-            script = f'''
-                tell application "Finder"
-                    set desktop picture to POSIX file "{safe_path}"
-                end tell
-            '''
+            # WALLPAPER_TARGET_DESKTOPに応じて適用範囲を変更
+            target_desktop = getattr(config, 'WALLPAPER_TARGET_DESKTOP', 0)
+
+            if target_desktop == 0:
+                # 全デスクトップに適用
+                script = f'''
+                    tell application "System Events"
+                        tell every desktop
+                            set picture to POSIX file "{safe_path}"
+                        end tell
+                    end tell
+                '''
+            else:
+                # 指定されたデスクトップのみに適用
+                script = f'''
+                    tell application "System Events"
+                        tell desktop {target_desktop}
+                            set picture to POSIX file "{safe_path}"
+                        end tell
+                    end tell
+                '''
 
             result = subprocess.run(
                 ['osascript', '-e', script],

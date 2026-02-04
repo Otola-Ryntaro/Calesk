@@ -14,6 +14,16 @@ IMAGE_HEIGHT = 1080
 BACKGROUND_COLOR = (255, 255, 255)  # 白背景（シンプル・ミニマル）
 TEXT_COLOR = (0, 0, 0)  # 黒文字
 
+# === マルチディスプレイ設定 ===
+# 壁紙を適用するデスクトップ番号
+# 0 = 全デスクトップ（デフォルト動作）
+# 1 = desktop 1のみ（通常は内蔵ディスプレイ/メインディスプレイ）
+# 2 = desktop 2のみ（外部ディスプレイ）
+WALLPAPER_TARGET_DESKTOP = 1
+
+# 解像度の自動検出（True推奨）
+AUTO_DETECT_RESOLUTION = True
+
 # === フォント設定 ===
 # システムにインストールされている日本語フォントのパスを指定
 # 見つからない場合はデフォルトフォントが使用されます
@@ -91,7 +101,7 @@ COLOR_BAR_OFFSET = 20
 # === 新デザイン: レイアウト設定（最適化版） ===
 
 # 空白エリア（デスクトップアイコン用）
-DESKTOP_ICON_AREA_HEIGHT = 180  # 固定値（パーセント指定から変更）
+DESKTOP_ICON_AREA_HEIGHT = 90   # 固定値、上部余白削減
 DESKTOP_ICON_LEFT_WIDTH_PERCENT = 20   # 左上20%
 DESKTOP_ICON_RIGHT_WIDTH_PERCENT = 20  # 右上20%
 
@@ -110,16 +120,29 @@ FONT_SIZE_CARD_TITLE = 14      # タイトル（20→14）
 FONT_SIZE_CARD_LOCATION = 12   # 場所（16→12）
 
 # 週間カレンダー設定
-WEEK_CALENDAR_START_HOUR = 7    # 7:00開始（6:00から変更）
-WEEK_CALENDAR_END_HOUR = 23     # 23:00終了
-HOUR_HEIGHT = 25                # 1時間あたりの高さ（38→25、動的計算の初期値）
+WEEK_CALENDAR_START_HOUR = 8    # 8:00開始
+WEEK_CALENDAR_END_HOUR = 22     # 22:00終了
+HOUR_HEIGHT = 27                # 1時間あたりの高さ（18pxの1.5倍、視認性重視）
 DAY_COLUMN_WIDTH = 120          # 1日の列幅
-FONT_SIZE_HOUR_LABEL = 11       # 時間ラベル（14→11）
-FONT_SIZE_DAY_HEADER = 14       # 曜日ヘッダー（18→14）
-FONT_SIZE_EVENT_BLOCK = 10      # イベントブロック内テキスト（12→10）
+FONT_SIZE_HOUR_LABEL = 12       # 時間ラベル（視認性向上）
+FONT_SIZE_DAY_HEADER = 16       # 曜日ヘッダー（視認性向上）
+FONT_SIZE_EVENT_BLOCK = 11      # イベントブロック内テキスト（最初の文字が見えるように）
 
-# カラーテーマ（将来的な拡張用）
-THEME = 'white'  # 'white', 'light_grey', 'pastel_blue'
+# === デザインテーマ設定 ===
+# 利用可能なテーマ: 'simple', 'fancy', 'stylish'
+# - simple: シンプル系（背景画像使用、黒文字）
+# - fancy: ファンシー系（パステルグラデーション、丸角カード）
+# - stylish: オシャレ系（ダークモード、ゴールドアクセント）
+THEME = 'simple'
+
+# === Google Calendar アイコン設定 ===
+CALENDAR_ICON_PATH = BASE_DIR / 'assets' / 'google_calendar_icon.png'
+CALENDAR_ICON_SIZE = (40, 40)  # アイコンサイズ（幅, 高さ）
+
+# アイコン配置設定（OS別）
+ICON_MAC_POSITION = (IMAGE_WIDTH - 60, 20)  # Mac: 上部右寄せ
+ICON_WINDOWS_POSITION = (IMAGE_WIDTH - 60, IMAGE_HEIGHT - 60)  # Windows: 右下
+ICON_LINUX_POSITION = (IMAGE_WIDTH - 60, 20)  # Linux: Mac同様
 
 # === 背景画像設定 ===
 # 背景画像を使用する場合は、画像ファイルのパスを指定
