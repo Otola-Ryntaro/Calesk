@@ -7,7 +7,7 @@ MVVMパターンにおけるView層。
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QPushButton, QProgressBar
+    QLabel, QComboBox, QPushButton, QProgressBar, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 import logging
@@ -216,12 +216,35 @@ class MainWindow(QMainWindow):
             logger.warning("壁紙更新に失敗しました")
 
     @pyqtSlot(str)
-    def _on_error_occurred(self, error_message: str):
+    def _on_error_occurred(self, error_message: str, level: str = "ERROR"):
         """
         エラー発生時の処理
 
         Args:
             error_message (str): エラーメッセージ
+            level (str): エラーレベル（ERROR, WARNING, CRITICAL）
         """
+        # ステータスバーに表示
         self.statusBar().showMessage(f"エラー: {error_message}")
         logger.error(f"エラーが発生しました: {error_message}")
+
+        # レベルに応じてダイアログ表示
+        if level == "WARNING":
+            QMessageBox.warning(self, "警告", error_message)
+        elif level == "CRITICAL":
+            QMessageBox.critical(self, "エラー", error_message)
+        # ERROR レベルはステータスバーのみ（既存動作維持）
+
+    def _on_critical_error(self, error_message: str):
+        """
+        重大なエラー発生時の処理
+
+        Args:
+            error_message (str): エラーメッセージ
+        """
+        # ステータスバーに表示
+        self.statusBar().showMessage(f"エラー: {error_message}")
+        logger.critical(f"重大なエラーが発生しました: {error_message}")
+
+        # ダイアログで表示
+        QMessageBox.critical(self, "エラー", error_message)
