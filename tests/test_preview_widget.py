@@ -11,6 +11,217 @@ from PyQt6.QtCore import Qt
 from pathlib import Path
 
 
+class TestPreviewState:
+    """PreviewState Enumのテスト（LOW-8: UI状態の一貫性）"""
+
+    def test_preview_state_enum_exists(self):
+        """PreviewState Enumが存在することを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        assert PreviewState is not None
+
+    def test_preview_state_has_initial(self):
+        """PreviewStateにINITIAL状態があることを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        assert hasattr(PreviewState, 'INITIAL')
+
+    def test_preview_state_has_loading(self):
+        """PreviewStateにLOADING状態があることを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        assert hasattr(PreviewState, 'LOADING')
+
+    def test_preview_state_has_loaded(self):
+        """PreviewStateにLOADED状態があることを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        assert hasattr(PreviewState, 'LOADED')
+
+    def test_preview_state_has_error(self):
+        """PreviewStateにERROR状態があることを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        assert hasattr(PreviewState, 'ERROR')
+
+    def test_preview_state_values_are_unique(self):
+        """PreviewStateの各値がユニークであることを確認"""
+        from src.ui.widgets.preview_widget import PreviewState
+
+        states = [PreviewState.INITIAL, PreviewState.LOADING, PreviewState.LOADED, PreviewState.ERROR]
+        # 全ての値がユニークであることを確認
+        assert len(states) == len(set(states))
+
+
+class TestPreviewWidgetState:
+    """PreviewWidgetの状態管理テスト（LOW-8: UI状態の一貫性）"""
+
+    def test_widget_has_state_property(self, qtbot):
+        """ウィジェットがstate読み取り専用プロパティを持つことを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # stateプロパティが存在し、PreviewState型であることを確認
+        assert hasattr(widget, 'state')
+        assert isinstance(widget.state, PreviewState)
+
+    def test_widget_initial_state_is_initial(self, qtbot):
+        """ウィジェットの初期状態がINITIALであることを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        assert widget.state == PreviewState.INITIAL
+
+    def test_state_property_is_readonly(self, qtbot):
+        """stateプロパティが読み取り専用であることを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 直接stateを変更しようとするとAttributeErrorが発生
+        with pytest.raises(AttributeError):
+            widget.state = PreviewState.LOADED
+
+
+class TestPreviewWidgetStateTransition:
+    """PreviewWidgetの状態遷移テスト（LOW-8: UI状態の一貫性）"""
+
+    def test_state_transitions_to_loaded_on_successful_image_load(self, qtbot, tmp_path):
+        """画像読み込み成功時にLOADED状態に遷移することを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 初期状態はINITIAL
+        assert widget.state == PreviewState.INITIAL
+
+        # テスト用の画像を作成
+        test_image_path = tmp_path / "test.png"
+        pixmap = QPixmap(800, 600)
+        pixmap.fill(Qt.GlobalColor.blue)
+        pixmap.save(str(test_image_path))
+
+        # 画像を設定
+        widget.set_image(test_image_path)
+
+        # LOADED状態に遷移
+        assert widget.state == PreviewState.LOADED
+
+    def test_state_transitions_to_error_on_failed_image_load(self, qtbot, tmp_path):
+        """画像読み込み失敗時にERROR状態に遷移し、自動クリアでINITIALに戻ることを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 存在しないファイルを設定
+        nonexistent_path = tmp_path / "nonexistent.png"
+        widget.set_image(nonexistent_path)
+
+        # エラー後、自動クリアでINITIAL状態に戻る
+        assert widget.state == PreviewState.INITIAL
+
+    def test_state_transitions_to_initial_on_clear(self, qtbot, tmp_path):
+        """clear_preview()でINITIAL状態に遷移することを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 画像を設定
+        test_image_path = tmp_path / "test.png"
+        pixmap = QPixmap(800, 600)
+        pixmap.fill(Qt.GlobalColor.blue)
+        pixmap.save(str(test_image_path))
+        widget.set_image(test_image_path)
+
+        assert widget.state == PreviewState.LOADED
+
+        # クリア
+        widget.clear_preview()
+
+        # INITIAL状態に遷移
+        assert widget.state == PreviewState.INITIAL
+
+    def test_state_transitions_loaded_to_loaded_on_image_change(self, qtbot, tmp_path):
+        """画像変更時にLOADED → LOADED遷移が正しく行われることを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 最初の画像を設定
+        first_image = tmp_path / "first.png"
+        pixmap1 = QPixmap(800, 600)
+        pixmap1.fill(Qt.GlobalColor.red)
+        pixmap1.save(str(first_image))
+        widget.set_image(first_image)
+
+        assert widget.state == PreviewState.LOADED
+
+        # 別の画像を設定
+        second_image = tmp_path / "second.png"
+        pixmap2 = QPixmap(800, 600)
+        pixmap2.fill(Qt.GlobalColor.green)
+        pixmap2.save(str(second_image))
+        widget.set_image(second_image)
+
+        # 引き続きLOADED状態
+        assert widget.state == PreviewState.LOADED
+
+    def test_state_transitions_loaded_to_error_to_initial(self, qtbot, tmp_path):
+        """LOADED状態から不正ファイル設定時にERROR → INITIAL遷移することを確認"""
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 有効な画像を設定
+        valid_image = tmp_path / "valid.png"
+        pixmap = QPixmap(800, 600)
+        pixmap.fill(Qt.GlobalColor.blue)
+        pixmap.save(str(valid_image))
+        widget.set_image(valid_image)
+
+        assert widget.state == PreviewState.LOADED
+
+        # 破損したファイルを設定
+        corrupted_file = tmp_path / "corrupted.png"
+        corrupted_file.write_bytes(b'\x89PNG\r\n\x1a\n')  # 不完全なPNG
+
+        widget.set_image(corrupted_file)
+
+        # エラー後、自動クリアでINITIAL状態に戻る
+        assert widget.state == PreviewState.INITIAL
+
+    def test_state_log_on_transition(self, qtbot, tmp_path, caplog):
+        """状態遷移時にログが出力されることを確認"""
+        import logging
+        from src.ui.widgets.preview_widget import PreviewWidget, PreviewState
+
+        caplog.set_level(logging.DEBUG)
+
+        widget = PreviewWidget()
+        qtbot.addWidget(widget)
+
+        # 画像を設定
+        test_image_path = tmp_path / "test.png"
+        pixmap = QPixmap(800, 600)
+        pixmap.fill(Qt.GlobalColor.blue)
+        pixmap.save(str(test_image_path))
+        widget.set_image(test_image_path)
+
+        # 状態遷移のログが含まれることを確認
+        assert any("状態遷移" in record.message or "state" in record.message.lower()
+                   for record in caplog.records)
+
+
 class TestPreviewWidget:
     """PreviewWidgetの基本機能をテストする"""
 

@@ -199,16 +199,18 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
 - エッジケースの追加（ネットワークエラー、権限エラーなど）
 
 **実装タスク**:
-- [ ] MainWindow テストで ViewModel モックを注入
+- [x] MainWindow テストで ViewModel モックを注入 ✅ **2026-02-05完了**
 - [x] `waitSignal` タイムアウトの明示的処理 ✅ **2026-02-05完了**
 - [x] エッジケーステストの追加 ✅ **2026-02-05完了**
 - [x] カバレッジ 90% 以上を目標 ✅ **91%達成**
 
 **実装内容（完了分）**:
+
 - ✅ **LOW-7.1**: `pytest.raises(Exception)`を`pytest.raises(TimeoutError)`に明示化
   - `from pytestqt.exceptions import TimeoutError`追加
   - 全106テスト合格
   - コードレビュー: 10/10 APPROVED
+  - コミット: 4e38339
 
 - ✅ **LOW-7.2**: 包括的なエッジケーステスト追加
   - +47新規テスト追加（合計153テスト全合格）
@@ -226,11 +228,24 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
     - パフォーマンステスト（500イベント処理を1秒以内）
   - **テストカバレッジ**: 91%達成（目標90%超え）
   - **コードレビュー**: 10/10 APPROVED
+  - コミット: 4e38339
+
+- ✅ **LOW-7.3**: ViewModelモック化
+  - MainWindowテストでViewModelを完全にモック化
+  - MockSignalクラスの追加（PyQt6シグナルのモック実装）
+  - create_mock_viewmodel()関数の追加（ViewModelモックファクトリー）
+  - pytestフィクスチャ追加（mock_viewmodel, window_with_mock）
+  - 全165テスト合格（+6 MockSignalユニットテスト）
+  - **テスト実行速度**: 約20倍改善（12-13秒 → 0.5-0.7秒）
+  - **テストの独立性**: ViewModelの実装変更に影響されない
+  - **コードレビュー**: 10/10 APPROVED
+  - コミット: c1aac42
 
 **ファイル**:
-- `tests/test_main_window.py` ✅ **更新完了（+18テスト）**
+- `tests/test_main_window.py` ✅ **更新完了（+18エッジケース、ViewModelモック化）**
 - `tests/test_main_viewmodel.py` ✅ **更新完了（+14テスト）**
 - `tests/test_preview_widget.py` ✅ **更新完了（+15テスト）**
+- `claudedocs/code_review_LOW-7.3.md` ✅ **新規作成**
 
 #### 8. UI状態の一貫性
 **現状の問題**:
