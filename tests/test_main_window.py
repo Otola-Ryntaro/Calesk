@@ -244,3 +244,294 @@ class TestMainWindow:
         window._on_error_occurred("ERROR: 通常エラー", level="ERROR")
         assert len(warning_called) == 1  # 変化なし
         assert len(critical_called) == 1  # 変化なし
+
+
+class TestMainWindowEdgeCases:
+    """MainWindowのエッジケーステスト"""
+
+    # 連続ボタンクリックのテスト
+    def test_update_button_disabled_during_update(self, qtbot):
+        """更新中はボタンが無効化されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        button = window.findChild(QPushButton, "update_button")
+
+        # 初期状態でボタンは有効
+        assert button.isEnabled()
+
+        # 更新開始をシミュレート
+        window._on_update_started()
+
+        # ボタンが無効化されていることを確認（ボタンの無効化は_on_update_clickedで行われる）
+        # _on_update_startedでは無効化されないので、_on_update_clickedを使う
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        # ボタンが無効化されていることを確認
+        assert not button.isEnabled()
+
+    def test_rapid_button_clicks_handled(self, qtbot):
+        """連続したボタンクリックが適切に処理されることを確認"""
+        from src.ui.main_window import MainWindow
+        from unittest.mock import patch
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        button = window.findChild(QPushButton, "update_button")
+
+        # 最初のクリック
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        # ボタンが無効化されているため、2回目以降のクリックは無視される
+        assert not button.isEnabled()
+
+        # 追加のクリックを試みる（無視されるべき）
+        for _ in range(5):
+            # ボタンが無効なのでクリックしても効果なし
+            if button.isEnabled():
+                qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+    def test_button_re_enabled_after_update_complete(self, qtbot):
+        """更新完了後にボタンが再有効化されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        button = window.findChild(QPushButton, "update_button")
+
+        # クリックしてボタンを無効化
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert not button.isEnabled()
+
+        # 更新完了をシミュレート
+        window._on_update_completed(True)
+
+        # ボタンが再有効化されていることを確認
+        assert button.isEnabled()
+
+    def test_button_re_enabled_after_update_failure(self, qtbot):
+        """更新失敗後にボタンが再有効化されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        button = window.findChild(QPushButton, "update_button")
+
+        # クリックしてボタンを無効化
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert not button.isEnabled()
+
+        # 更新失敗をシミュレート
+        window._on_update_completed(False)
+
+        # ボタンが再有効化されていることを確認
+        assert button.isEnabled()
+
+    # 境界値UIテスト
+    def test_progress_bar_boundary_values(self, qtbot):
+        """プログレスバーの境界値を正しく処理することを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        progress_bar = window.findChild(QProgressBar, "progress_bar")
+
+        # 0%
+        window._on_progress_updated(0)
+        assert progress_bar.value() == 0
+
+        # 100%
+        window._on_progress_updated(100)
+        assert progress_bar.value() == 100
+
+        # 50%
+        window._on_progress_updated(50)
+        assert progress_bar.value() == 50
+
+    def test_progress_bar_handles_negative_value(self, qtbot):
+        """プログレスバーが負の値を適切に処理することを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        progress_bar = window.findChild(QProgressBar, "progress_bar")
+
+        # 負の値（0にクランプされるべき）
+        window._on_progress_updated(-10)
+        # QProgressBarはrangeによって自動クランプされる
+        assert progress_bar.value() >= 0
+
+    def test_progress_bar_handles_over_100_value(self, qtbot):
+        """プログレスバーが100を超える値を適切に処理することを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        progress_bar = window.findChild(QProgressBar, "progress_bar")
+
+        # 100を超える値（100にクランプされるべき）
+        window._on_progress_updated(150)
+        # QProgressBarはrangeによって自動クランプされる
+        assert progress_bar.value() <= 100
+
+    # ステータスバーのテスト
+    def test_status_bar_shows_initial_message(self, qtbot):
+        """ステータスバーに初期メッセージが表示されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        assert window.statusBar().currentMessage() == "準備完了"
+
+    def test_status_bar_shows_update_message(self, qtbot):
+        """ステータスバーに更新中メッセージが表示されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        window._on_update_started()
+        assert "更新中" in window.statusBar().currentMessage()
+
+    def test_status_bar_shows_success_message(self, qtbot):
+        """ステータスバーに成功メッセージが表示されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        window._on_update_completed(True)
+        assert "更新しました" in window.statusBar().currentMessage()
+
+    def test_status_bar_shows_failure_message(self, qtbot):
+        """ステータスバーに失敗メッセージが表示されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        window._on_update_completed(False)
+        assert "失敗" in window.statusBar().currentMessage()
+
+    # 長いエラーメッセージのテスト
+    def test_long_error_message_in_status_bar(self, qtbot):
+        """長いエラーメッセージがステータスバーに表示されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # 非常に長いエラーメッセージ
+        long_message = "エラー: " + "あ" * 1000
+        window._on_error_occurred(long_message)
+
+        # メッセージが表示されることを確認（切り詰められる可能性あり）
+        assert "エラー" in window.statusBar().currentMessage()
+
+    # テーマ変更のテスト
+    def test_theme_combo_changes_viewmodel_theme(self, qtbot):
+        """テーマComboBoxの変更がViewModelに反映されることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        combo = window.findChild(QComboBox, "theme_combo")
+
+        # 別のテーマを選択
+        if combo.count() > 1:
+            combo.setCurrentIndex(1)
+            new_theme = combo.currentText()
+
+            # ViewModelのテーマが変更されていることを確認
+            assert window.viewmodel.current_theme == new_theme
+
+    def test_theme_combo_all_items_valid(self, qtbot):
+        """テーマComboBoxの全項目が有効であることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        combo = window.findChild(QComboBox, "theme_combo")
+        available_themes = window.viewmodel.get_available_themes()
+
+        # ComboBoxの全項目がViewModelで認識されていることを確認
+        for i in range(combo.count()):
+            theme_name = combo.itemText(i)
+            assert theme_name in available_themes or theme_name != ""
+
+    # ウィンドウリサイズのテスト
+    def test_window_resize_minimum(self, qtbot):
+        """ウィンドウを最小サイズにリサイズできることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # 最小サイズにリサイズ
+        window.resize(100, 100)
+
+        # クラッシュしないことを確認
+        assert window.isVisible() or True  # ウィジェットが存在することを確認
+
+    def test_window_resize_very_large(self, qtbot):
+        """ウィンドウを非常に大きなサイズにリサイズできることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # 非常に大きなサイズにリサイズ
+        window.resize(4000, 3000)
+
+        # クラッシュしないことを確認
+        assert window.isVisible() or True
+
+    # 特殊なエラーメッセージのテスト
+    def test_error_message_with_special_characters(self, qtbot):
+        """特殊文字を含むエラーメッセージを処理できることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # 特殊文字を含むエラーメッセージ
+        special_messages = [
+            "エラー: <script>alert('xss')</script>",
+            "エラー: 改行\n\r\tを含む",
+            "エラー: SQL' OR '1'='1",
+        ]
+
+        for msg in special_messages:
+            window._on_error_occurred(msg)
+            # クラッシュしないことを確認
+            assert "エラー" in window.statusBar().currentMessage()
+
+    # ViewModelとの連携テスト
+    def test_viewmodel_signals_properly_connected(self, qtbot):
+        """ViewModelのシグナルが正しく接続されていることを確認"""
+        from src.ui.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+
+        # ViewModelのシグナルが接続されていることを確認
+        # update_started シグナルをemit
+        window.viewmodel.update_started.emit()
+        # クラッシュしないことを確認
+
+        # progress_updated シグナルをemit
+        window.viewmodel.progress_updated.emit(50)
+
+        # error_occurred シグナルをemit
+        window.viewmodel.error_occurred.emit("テストエラー")

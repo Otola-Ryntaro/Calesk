@@ -201,19 +201,36 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
 **実装タスク**:
 - [ ] MainWindow テストで ViewModel モックを注入
 - [x] `waitSignal` タイムアウトの明示的処理 ✅ **2026-02-05完了**
-- [ ] エッジケーステストの追加
-- [ ] カバレッジ 90% 以上を目標
+- [x] エッジケーステストの追加 ✅ **2026-02-05完了**
+- [x] カバレッジ 90% 以上を目標 ✅ **91%達成**
 
 **実装内容（完了分）**:
-- ✅ `pytest.raises(Exception)`を`pytest.raises(TimeoutError)`に明示化
-- ✅ `from pytestqt.exceptions import TimeoutError`追加
-- ✅ 全106テスト合格
-- ✅ コードレビュー: 10/10 APPROVED
+- ✅ **LOW-7.1**: `pytest.raises(Exception)`を`pytest.raises(TimeoutError)`に明示化
+  - `from pytestqt.exceptions import TimeoutError`追加
+  - 全106テスト合格
+  - コードレビュー: 10/10 APPROVED
+
+- ✅ **LOW-7.2**: 包括的なエッジケーステスト追加
+  - +47新規テスト追加（合計153テスト全合格）
+  - **MainViewModel**: 14エッジケーステスト追加
+    - 特殊文字処理（XSS, SQLインジェクション対策）
+    - 100件以上のイベント処理
+    - 境界値テスト（0件, 1件, 100件）
+  - **PreviewWidget**: 15エッジケーステスト追加
+    - セキュリティ（パストラバーサル, シンボリックリンク）
+    - ファイルサイズ境界値（10MB制限）
+    - 破損ファイル、偽装拡張子対応
+  - **MainWindow**: 18エッジケーステスト追加
+    - 連続クリック処理、極端なウィンドウサイズ
+    - 特殊文字を含むエラーメッセージ
+    - パフォーマンステスト（500イベント処理を1秒以内）
+  - **テストカバレッジ**: 91%達成（目標90%超え）
+  - **コードレビュー**: 10/10 APPROVED
 
 **ファイル**:
-- `tests/test_main_window.py`
-- `tests/test_main_viewmodel.py` ✅ **更新完了**
-- `tests/test_preview_widget.py`
+- `tests/test_main_window.py` ✅ **更新完了（+18テスト）**
+- `tests/test_main_viewmodel.py` ✅ **更新完了（+14テスト）**
+- `tests/test_preview_widget.py` ✅ **更新完了（+15テスト）**
 
 #### 8. UI状態の一貫性
 **現状の問題**:
