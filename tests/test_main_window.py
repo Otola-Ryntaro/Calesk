@@ -2,15 +2,90 @@
 MainWindowのテスト
 
 PyQt6のメインウィンドウをテストします。
+ViewModelをモック化してテストの独立性を確保します。
 """
 
 import pytest
+from unittest.mock import Mock
 from PyQt6.QtWidgets import QMainWindow, QComboBox, QPushButton, QProgressBar
 from PyQt6.QtCore import Qt
 
 
+class MockSignal:
+    """
+    PyQt6シグナルのモック
+
+    connectとemitメソッドを持ち、シグナルの動作をシミュレートします。
+    """
+
+    def __init__(self):
+        self._callbacks = []
+
+    def connect(self, callback):
+        """シグナルにコールバックを接続"""
+        self._callbacks.append(callback)
+
+    def emit(self, *args, **kwargs):
+        """シグナルを発火し、接続された全てのコールバックを呼び出す"""
+        for callback in self._callbacks:
+            callback(*args, **kwargs)
+
+    def disconnect(self, callback=None):
+        """コールバックを切断"""
+        if callback:
+            self._callbacks.remove(callback)
+        else:
+            self._callbacks.clear()
+
+
+def create_mock_viewmodel():
+    """
+    MainViewModelのモックを作成
+
+    Returns:
+        Mock: MainViewModelのモック
+    """
+    mock_vm = Mock()
+
+    # プロパティの設定
+    mock_vm.current_theme = "simple"
+    mock_vm.is_updating = False
+
+    # メソッドの設定
+    mock_vm.get_available_themes.return_value = ["simple", "modern", "pastel", "dark", "vibrant"]
+    mock_vm.set_theme = Mock()
+    mock_vm.update_wallpaper = Mock(return_value=True)
+    mock_vm.cancel_update = Mock()
+
+    # シグナルの設定（MockSignalを使用）
+    mock_vm.theme_changed = MockSignal()
+    mock_vm.update_started = MockSignal()
+    mock_vm.update_completed = MockSignal()
+    mock_vm.progress_updated = MockSignal()
+    mock_vm.error_occurred = MockSignal()
+    mock_vm.wallpaper_updated = MockSignal()
+
+    return mock_vm
+
+
+@pytest.fixture
+def mock_viewmodel():
+    """モックされたMainViewModelを提供するフィクスチャ"""
+    return create_mock_viewmodel()
+
+
+@pytest.fixture
+def window_with_mock(qtbot, mock_viewmodel):
+    """モックViewModelを使用したMainWindowを提供するフィクスチャ"""
+    from src.ui.main_window import MainWindow
+
+    window = MainWindow(viewmodel=mock_viewmodel)
+    qtbot.addWidget(window)
+    return window
+
+
 class TestMainWindow:
-    """MainWindowの基本機能をテストする"""
+    """MainWindowの基本機能をテストする（モックViewModel使用）"""
 
     def test_main_window_exists(self, qtbot):
         """MainWindowクラスが存在することを確認"""
@@ -19,176 +94,104 @@ class TestMainWindow:
         assert MainWindow is not None
         assert issubclass(MainWindow, QMainWindow)
 
-    def test_main_window_initialization(self, qtbot):
+    def test_main_window_initialization(self, window_with_mock, mock_viewmodel):
         """MainWindowが正しく初期化されることを確認"""
-        from src.ui.main_window import MainWindow
+        assert window_with_mock is not None
+        assert isinstance(window_with_mock, QMainWindow)
+        assert window_with_mock.windowTitle() == "カレンダー壁紙アプリ"
+        assert window_with_mock.viewmodel is mock_viewmodel
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        assert window is not None
-        assert isinstance(window, QMainWindow)
-        assert window.windowTitle() == "カレンダー壁紙アプリ"
-
-    def test_main_window_has_theme_combobox(self, qtbot):
+    def test_main_window_has_theme_combobox(self, window_with_mock, mock_viewmodel):
         """テーマ選択ComboBoxが存在することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # ComboBoxを検索
-        combo = window.findChild(QComboBox, "theme_combo")
+        combo = window_with_mock.findChild(QComboBox, "theme_combo")
         assert combo is not None
-        assert combo.count() >= 5  # 最低5つのテーマ（simple, modern, pastel, dark, vibrant）
+        # モックから5つのテーマを取得
+        assert combo.count() == 5
+        mock_viewmodel.get_available_themes.assert_called()
 
-    def test_main_window_has_update_button(self, qtbot):
+    def test_main_window_has_update_button(self, window_with_mock):
         """「今すぐ更新」ボタンが存在することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # ボタンを検索
-        button = window.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "update_button")
         assert button is not None
         assert button.text() == "今すぐ更新"
 
-    def test_main_window_has_preview_widget(self, qtbot):
+    def test_main_window_has_preview_widget(self, window_with_mock):
         """プレビューウィジェットが存在することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # PreviewWidgetを検索
-        preview = window.findChild(object, "preview_widget")
+        preview = window_with_mock.findChild(object, "preview_widget")
         assert preview is not None
 
-    def test_theme_combo_default_selection(self, qtbot):
+    def test_theme_combo_default_selection(self, window_with_mock, mock_viewmodel):
         """テーマComboBoxのデフォルト選択が"simple"であることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        combo = window.findChild(QComboBox, "theme_combo")
+        combo = window_with_mock.findChild(QComboBox, "theme_combo")
+        # モックのcurrent_themeが"simple"なので、ComboBoxも"simple"に設定される
         assert combo.currentText() == "simple"
 
-    def test_update_button_click(self, qtbot):
+    def test_update_button_click(self, qtbot, window_with_mock, mock_viewmodel):
         """「今すぐ更新」ボタンをクリックできることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        button = window.findChild(QPushButton, "update_button")
-        # ボタンが有効であることを確認
+        button = window_with_mock.findChild(QPushButton, "update_button")
         assert button.isEnabled()
 
-        # ボタンクリックをシミュレート
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-        # クリック後の動作は別途テスト
+        # モックのupdate_wallpaperが呼ばれることを確認
+        mock_viewmodel.update_wallpaper.assert_called_once()
 
-    def test_main_window_has_progress_bar(self, qtbot):
+    def test_main_window_has_progress_bar(self, window_with_mock):
         """QProgressBarが存在することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # ProgressBarを検索
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
         assert progress_bar is not None
 
-    def test_progress_bar_initially_hidden(self, qtbot):
+    def test_progress_bar_initially_hidden(self, window_with_mock):
         """初期状態でQProgressBarが非表示であることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
         assert progress_bar.isHidden()
 
-    def test_progress_bar_shows_on_update_start(self, qtbot):
+    def test_progress_bar_shows_on_update_start(self, window_with_mock, mock_viewmodel):
         """壁紙更新開始時にQProgressBarが表示されることを確認"""
-        from src.ui.main_window import MainWindow
+        window_with_mock.show()
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-        window.show()  # ウィンドウを表示
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
-
-        # 初期状態で非表示であることを確認
         assert progress_bar.isHidden()
 
-        # update_started ハンドラを直接呼び出し
-        window._on_update_started()
+        # ViewModelのシグナルをemit
+        mock_viewmodel.update_started.emit()
 
-        # ProgressBarが表示されることを確認
         assert progress_bar.isVisible()
 
-    def test_progress_bar_updates_on_progress(self, qtbot):
+    def test_progress_bar_updates_on_progress(self, window_with_mock, mock_viewmodel):
         """進捗シグナルでQProgressBarが更新されることを確認"""
-        from src.ui.main_window import MainWindow
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
-        window = MainWindow()
-        qtbot.addWidget(window)
+        # ViewModelのシグナルをemit
+        mock_viewmodel.progress_updated.emit(50)
 
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
-
-        # progress_updated ハンドラを直接呼び出し
-        window._on_progress_updated(50)
-
-        # ProgressBarの値が更新されることを確認
         assert progress_bar.value() == 50
 
-    def test_progress_bar_hides_on_update_complete(self, qtbot):
+    def test_progress_bar_hides_on_update_complete(self, window_with_mock, mock_viewmodel):
         """壁紙更新完了時にQProgressBarが非表示になることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-        window.show()  # ウィンドウを表示
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        window_with_mock.show()
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
         # まず表示
-        window._on_update_started()
+        mock_viewmodel.update_started.emit()
         assert progress_bar.isVisible()
 
-        # update_completed ハンドラを直接呼び出し
-        window._on_update_completed(True)
+        # ViewModelのシグナルをemit
+        mock_viewmodel.update_completed.emit(True)
 
-        # ProgressBarが非表示になることを確認
         assert progress_bar.isHidden()
 
-    # MEDIUM-6: エラーフィードバック改善テスト
-    def test_error_message_shows_in_status_bar(self, qtbot):
+    def test_error_message_shows_in_status_bar(self, window_with_mock, mock_viewmodel):
         """エラーメッセージがステータスバーに表示されることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # エラーハンドラを直接呼び出し
         error_message = "テストエラーメッセージ"
-        window._on_error_occurred(error_message)
+        # ViewModelのシグナルをemit
+        mock_viewmodel.error_occurred.emit(error_message)
 
-        # ステータスバーにエラーが表示される
-        assert f"エラー: {error_message}" in window.statusBar().currentMessage()
+        assert f"エラー: {error_message}" in window_with_mock.statusBar().currentMessage()
 
-    def test_critical_error_shows_message_box(self, qtbot, monkeypatch):
+    def test_critical_error_shows_message_box(self, window_with_mock, monkeypatch):
         """重大なエラー時にQMessageBoxが表示されることを確認"""
-        from src.ui.main_window import MainWindow
         from PyQt6.QtWidgets import QMessageBox
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # QMessageBox.critical のモック
         critical_called = []
 
         def mock_critical(parent, title, message):
@@ -200,24 +203,18 @@ class TestMainWindow:
 
         monkeypatch.setattr(QMessageBox, "critical", mock_critical)
 
-        # 重大なエラーハンドラを直接呼び出し
         error_message = "重大なエラーが発生しました"
-        window._on_critical_error(error_message)
+        # ハンドラを直接呼び出し（CRITICALレベル用）
+        window_with_mock._on_critical_error(error_message)
 
-        # QMessageBox.criticalが呼ばれたことを確認
         assert len(critical_called) == 1
         assert critical_called[0]["title"] == "エラー"
         assert error_message in critical_called[0]["message"]
 
-    def test_error_level_classification(self, qtbot, monkeypatch):
+    def test_error_level_classification(self, window_with_mock, monkeypatch):
         """エラーレベルに応じて適切な処理が行われることを確認"""
-        from src.ui.main_window import MainWindow
         from PyQt6.QtWidgets import QMessageBox
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # QMessageBox のモック
         warning_called = []
         critical_called = []
 
@@ -231,56 +228,38 @@ class TestMainWindow:
         monkeypatch.setattr(QMessageBox, "critical", mock_critical)
 
         # WARNING レベルのエラー
-        window._on_error_occurred("WARNING: テスト警告", level="WARNING")
+        window_with_mock._on_error_occurred("WARNING: テスト警告", level="WARNING")
         assert len(warning_called) == 1
         assert len(critical_called) == 0
 
         # CRITICAL レベルのエラー
-        window._on_error_occurred("CRITICAL: 重大エラー", level="CRITICAL")
+        window_with_mock._on_error_occurred("CRITICAL: 重大エラー", level="CRITICAL")
         assert len(warning_called) == 1
         assert len(critical_called) == 1
 
         # ERROR レベルのエラー（ステータスバーのみ、ダイアログなし）
-        window._on_error_occurred("ERROR: 通常エラー", level="ERROR")
-        assert len(warning_called) == 1  # 変化なし
-        assert len(critical_called) == 1  # 変化なし
+        window_with_mock._on_error_occurred("ERROR: 通常エラー", level="ERROR")
+        assert len(warning_called) == 1
+        assert len(critical_called) == 1
 
 
 class TestMainWindowEdgeCases:
-    """MainWindowのエッジケーステスト"""
+    """MainWindowのエッジケーステスト（モックViewModel使用）"""
 
-    # 連続ボタンクリックのテスト
-    def test_update_button_disabled_during_update(self, qtbot):
+    def test_update_button_disabled_during_update(self, qtbot, window_with_mock, mock_viewmodel):
         """更新中はボタンが無効化されることを確認"""
-        from src.ui.main_window import MainWindow
+        button = window_with_mock.findChild(QPushButton, "update_button")
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        button = window.findChild(QPushButton, "update_button")
-
-        # 初期状態でボタンは有効
         assert button.isEnabled()
 
-        # 更新開始をシミュレート
-        window._on_update_started()
-
-        # ボタンが無効化されていることを確認（ボタンの無効化は_on_update_clickedで行われる）
-        # _on_update_startedでは無効化されないので、_on_update_clickedを使う
+        # ボタンクリックで無効化
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
-        # ボタンが無効化されていることを確認
         assert not button.isEnabled()
 
-    def test_rapid_button_clicks_handled(self, qtbot):
+    def test_rapid_button_clicks_handled(self, qtbot, window_with_mock, mock_viewmodel):
         """連続したボタンクリックが適切に処理されることを確認"""
-        from src.ui.main_window import MainWindow
-        from unittest.mock import patch
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        button = window.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "update_button")
 
         # 最初のクリック
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
@@ -290,222 +269,128 @@ class TestMainWindowEdgeCases:
 
         # 追加のクリックを試みる（無視されるべき）
         for _ in range(5):
-            # ボタンが無効なのでクリックしても効果なし
             if button.isEnabled():
                 qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
-    def test_button_re_enabled_after_update_complete(self, qtbot):
+        # update_wallpaperは1回だけ呼ばれる
+        mock_viewmodel.update_wallpaper.assert_called_once()
+
+    def test_button_re_enabled_after_update_complete(self, qtbot, window_with_mock, mock_viewmodel):
         """更新完了後にボタンが再有効化されることを確認"""
-        from src.ui.main_window import MainWindow
+        button = window_with_mock.findChild(QPushButton, "update_button")
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        button = window.findChild(QPushButton, "update_button")
-
-        # クリックしてボタンを無効化
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
         assert not button.isEnabled()
 
-        # 更新完了をシミュレート
-        window._on_update_completed(True)
+        # ViewModelのシグナルをemit
+        mock_viewmodel.update_completed.emit(True)
 
-        # ボタンが再有効化されていることを確認
         assert button.isEnabled()
 
-    def test_button_re_enabled_after_update_failure(self, qtbot):
+    def test_button_re_enabled_after_update_failure(self, qtbot, window_with_mock, mock_viewmodel):
         """更新失敗後にボタンが再有効化されることを確認"""
-        from src.ui.main_window import MainWindow
+        button = window_with_mock.findChild(QPushButton, "update_button")
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        button = window.findChild(QPushButton, "update_button")
-
-        # クリックしてボタンを無効化
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
         assert not button.isEnabled()
 
-        # 更新失敗をシミュレート
-        window._on_update_completed(False)
+        # ViewModelのシグナルをemit（失敗）
+        mock_viewmodel.update_completed.emit(False)
 
-        # ボタンが再有効化されていることを確認
         assert button.isEnabled()
 
-    # 境界値UIテスト
-    def test_progress_bar_boundary_values(self, qtbot):
+    def test_progress_bar_boundary_values(self, window_with_mock, mock_viewmodel):
         """プログレスバーの境界値を正しく処理することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
         # 0%
-        window._on_progress_updated(0)
+        mock_viewmodel.progress_updated.emit(0)
         assert progress_bar.value() == 0
 
         # 100%
-        window._on_progress_updated(100)
+        mock_viewmodel.progress_updated.emit(100)
         assert progress_bar.value() == 100
 
         # 50%
-        window._on_progress_updated(50)
+        mock_viewmodel.progress_updated.emit(50)
         assert progress_bar.value() == 50
 
-    def test_progress_bar_handles_negative_value(self, qtbot):
+    def test_progress_bar_handles_negative_value(self, window_with_mock, mock_viewmodel):
         """プログレスバーが負の値を適切に処理することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
         # 負の値（0にクランプされるべき）
-        window._on_progress_updated(-10)
-        # QProgressBarはrangeによって自動クランプされる
+        mock_viewmodel.progress_updated.emit(-10)
         assert progress_bar.value() >= 0
 
-    def test_progress_bar_handles_over_100_value(self, qtbot):
+    def test_progress_bar_handles_over_100_value(self, window_with_mock, mock_viewmodel):
         """プログレスバーが100を超える値を適切に処理することを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        progress_bar = window.findChild(QProgressBar, "progress_bar")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
         # 100を超える値（100にクランプされるべき）
-        window._on_progress_updated(150)
-        # QProgressBarはrangeによって自動クランプされる
+        mock_viewmodel.progress_updated.emit(150)
         assert progress_bar.value() <= 100
 
-    # ステータスバーのテスト
-    def test_status_bar_shows_initial_message(self, qtbot):
+    def test_status_bar_shows_initial_message(self, window_with_mock):
         """ステータスバーに初期メッセージが表示されることを確認"""
-        from src.ui.main_window import MainWindow
+        assert window_with_mock.statusBar().currentMessage() == "準備完了"
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        assert window.statusBar().currentMessage() == "準備完了"
-
-    def test_status_bar_shows_update_message(self, qtbot):
+    def test_status_bar_shows_update_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに更新中メッセージが表示されることを確認"""
-        from src.ui.main_window import MainWindow
+        mock_viewmodel.update_started.emit()
+        assert "更新中" in window_with_mock.statusBar().currentMessage()
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        window._on_update_started()
-        assert "更新中" in window.statusBar().currentMessage()
-
-    def test_status_bar_shows_success_message(self, qtbot):
+    def test_status_bar_shows_success_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに成功メッセージが表示されることを確認"""
-        from src.ui.main_window import MainWindow
+        mock_viewmodel.update_completed.emit(True)
+        assert "更新しました" in window_with_mock.statusBar().currentMessage()
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        window._on_update_completed(True)
-        assert "更新しました" in window.statusBar().currentMessage()
-
-    def test_status_bar_shows_failure_message(self, qtbot):
+    def test_status_bar_shows_failure_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに失敗メッセージが表示されることを確認"""
-        from src.ui.main_window import MainWindow
+        mock_viewmodel.update_completed.emit(False)
+        assert "失敗" in window_with_mock.statusBar().currentMessage()
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        window._on_update_completed(False)
-        assert "失敗" in window.statusBar().currentMessage()
-
-    # 長いエラーメッセージのテスト
-    def test_long_error_message_in_status_bar(self, qtbot):
+    def test_long_error_message_in_status_bar(self, window_with_mock, mock_viewmodel):
         """長いエラーメッセージがステータスバーに表示されることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # 非常に長いエラーメッセージ
         long_message = "エラー: " + "あ" * 1000
-        window._on_error_occurred(long_message)
+        mock_viewmodel.error_occurred.emit(long_message)
 
-        # メッセージが表示されることを確認（切り詰められる可能性あり）
-        assert "エラー" in window.statusBar().currentMessage()
+        assert "エラー" in window_with_mock.statusBar().currentMessage()
 
-    # テーマ変更のテスト
-    def test_theme_combo_changes_viewmodel_theme(self, qtbot):
+    def test_theme_combo_changes_viewmodel_theme(self, window_with_mock, mock_viewmodel):
         """テーマComboBoxの変更がViewModelに反映されることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        combo = window.findChild(QComboBox, "theme_combo")
+        combo = window_with_mock.findChild(QComboBox, "theme_combo")
 
         # 別のテーマを選択
-        if combo.count() > 1:
-            combo.setCurrentIndex(1)
-            new_theme = combo.currentText()
+        combo.setCurrentText("modern")
 
-            # ViewModelのテーマが変更されていることを確認
-            assert window.viewmodel.current_theme == new_theme
+        # ViewModelのset_themeが呼ばれることを確認
+        mock_viewmodel.set_theme.assert_called_with("modern")
 
-    def test_theme_combo_all_items_valid(self, qtbot):
+    def test_theme_combo_all_items_valid(self, window_with_mock, mock_viewmodel):
         """テーマComboBoxの全項目が有効であることを確認"""
-        from src.ui.main_window import MainWindow
+        combo = window_with_mock.findChild(QComboBox, "theme_combo")
+        available_themes = mock_viewmodel.get_available_themes()
 
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        combo = window.findChild(QComboBox, "theme_combo")
-        available_themes = window.viewmodel.get_available_themes()
-
-        # ComboBoxの全項目がViewModelで認識されていることを確認
+        # ComboBoxの全項目がモックViewModelで認識されていることを確認
         for i in range(combo.count()):
             theme_name = combo.itemText(i)
             assert theme_name in available_themes or theme_name != ""
 
-    # ウィンドウリサイズのテスト
-    def test_window_resize_minimum(self, qtbot):
+    def test_window_resize_minimum(self, window_with_mock):
         """ウィンドウを最小サイズにリサイズできることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # 最小サイズにリサイズ
-        window.resize(100, 100)
-
+        window_with_mock.resize(100, 100)
         # クラッシュしないことを確認
-        assert window.isVisible() or True  # ウィジェットが存在することを確認
+        assert window_with_mock.isVisible() or True
 
-    def test_window_resize_very_large(self, qtbot):
+    def test_window_resize_very_large(self, window_with_mock):
         """ウィンドウを非常に大きなサイズにリサイズできることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # 非常に大きなサイズにリサイズ
-        window.resize(4000, 3000)
-
+        window_with_mock.resize(4000, 3000)
         # クラッシュしないことを確認
-        assert window.isVisible() or True
+        assert window_with_mock.isVisible() or True
 
-    # 特殊なエラーメッセージのテスト
-    def test_error_message_with_special_characters(self, qtbot):
+    def test_error_message_with_special_characters(self, window_with_mock, mock_viewmodel):
         """特殊文字を含むエラーメッセージを処理できることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # 特殊文字を含むエラーメッセージ
         special_messages = [
             "エラー: <script>alert('xss')</script>",
             "エラー: 改行\n\r\tを含む",
@@ -513,25 +398,183 @@ class TestMainWindowEdgeCases:
         ]
 
         for msg in special_messages:
-            window._on_error_occurred(msg)
-            # クラッシュしないことを確認
-            assert "エラー" in window.statusBar().currentMessage()
+            mock_viewmodel.error_occurred.emit(msg)
+            assert "エラー" in window_with_mock.statusBar().currentMessage()
 
-    # ViewModelとの連携テスト
-    def test_viewmodel_signals_properly_connected(self, qtbot):
+    def test_viewmodel_signals_properly_connected(self, window_with_mock, mock_viewmodel):
         """ViewModelのシグナルが正しく接続されていることを確認"""
-        from src.ui.main_window import MainWindow
-
-        window = MainWindow()
-        qtbot.addWidget(window)
-
-        # ViewModelのシグナルが接続されていることを確認
         # update_started シグナルをemit
-        window.viewmodel.update_started.emit()
+        mock_viewmodel.update_started.emit()
         # クラッシュしないことを確認
 
         # progress_updated シグナルをemit
-        window.viewmodel.progress_updated.emit(50)
+        mock_viewmodel.progress_updated.emit(50)
 
         # error_occurred シグナルをemit
-        window.viewmodel.error_occurred.emit("テストエラー")
+        mock_viewmodel.error_occurred.emit("テストエラー")
+
+
+class TestMainWindowViewModelInteraction:
+    """MainWindowとViewModelの相互作用テスト"""
+
+    def test_theme_change_calls_set_theme(self, window_with_mock, mock_viewmodel):
+        """テーマ変更時にViewModelのset_themeが呼ばれることを確認"""
+        combo = window_with_mock.findChild(QComboBox, "theme_combo")
+
+        combo.setCurrentText("modern")
+        mock_viewmodel.set_theme.assert_called_with("modern")
+
+        combo.setCurrentText("dark")
+        mock_viewmodel.set_theme.assert_called_with("dark")
+
+    def test_update_button_calls_update_wallpaper(self, qtbot, window_with_mock, mock_viewmodel):
+        """更新ボタンクリックでViewModelのupdate_wallpaperが呼ばれることを確認"""
+        button = window_with_mock.findChild(QPushButton, "update_button")
+
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        mock_viewmodel.update_wallpaper.assert_called_once()
+
+    def test_theme_changed_signal_updates_preview(self, window_with_mock, mock_viewmodel):
+        """ViewModelのtheme_changedシグナルでプレビューがクリアされることを確認"""
+        # theme_changedシグナルをemit
+        mock_viewmodel.theme_changed.emit("modern")
+
+        # ステータスバーにテーマ名が表示される
+        assert "テーマ: modern" in window_with_mock.statusBar().currentMessage()
+
+    def test_multiple_progress_updates(self, window_with_mock, mock_viewmodel):
+        """複数回の進捗更新が正しく処理されることを確認"""
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
+
+        # 進捗を段階的に更新
+        for progress in [10, 25, 50, 75, 90, 100]:
+            mock_viewmodel.progress_updated.emit(progress)
+            assert progress_bar.value() == progress
+
+    def test_error_then_success_flow(self, window_with_mock, mock_viewmodel):
+        """エラー発生後に成功するフローをテスト"""
+        # エラー発生
+        mock_viewmodel.error_occurred.emit("一時的なエラー")
+        assert "エラー" in window_with_mock.statusBar().currentMessage()
+
+        # その後成功
+        mock_viewmodel.update_completed.emit(True)
+        assert "更新しました" in window_with_mock.statusBar().currentMessage()
+
+    def test_complete_update_cycle(self, qtbot, window_with_mock, mock_viewmodel):
+        """完全な更新サイクルをテスト"""
+        window_with_mock.show()
+        button = window_with_mock.findChild(QPushButton, "update_button")
+        progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
+
+        # 1. 更新開始
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        assert not button.isEnabled()
+        mock_viewmodel.update_wallpaper.assert_called_once()
+
+        # 2. 更新開始シグナル
+        mock_viewmodel.update_started.emit()
+        assert progress_bar.isVisible()
+        assert "更新中" in window_with_mock.statusBar().currentMessage()
+
+        # 3. 進捗更新
+        for progress in [25, 50, 75, 100]:
+            mock_viewmodel.progress_updated.emit(progress)
+            assert progress_bar.value() == progress
+
+        # 4. 更新完了
+        mock_viewmodel.update_completed.emit(True)
+        assert button.isEnabled()
+        assert progress_bar.isHidden()
+        assert "更新しました" in window_with_mock.statusBar().currentMessage()
+
+
+class TestMockSignal:
+    """MockSignalクラスのユニットテスト"""
+
+    def test_mock_signal_connect_and_emit(self):
+        """MockSignalのconnectとemitが正しく動作することを確認"""
+        signal = MockSignal()
+        received_values = []
+
+        def callback(value):
+            received_values.append(value)
+
+        signal.connect(callback)
+        signal.emit("test_value")
+
+        assert received_values == ["test_value"]
+
+    def test_mock_signal_multiple_callbacks(self):
+        """MockSignalが複数のコールバックを処理できることを確認"""
+        signal = MockSignal()
+        callback1_values = []
+        callback2_values = []
+
+        signal.connect(lambda v: callback1_values.append(v))
+        signal.connect(lambda v: callback2_values.append(v))
+
+        signal.emit("test")
+
+        assert callback1_values == ["test"]
+        assert callback2_values == ["test"]
+
+    def test_mock_signal_disconnect(self):
+        """MockSignalのdisconnectが正しく動作することを確認"""
+        signal = MockSignal()
+        received_values = []
+
+        def callback(value):
+            received_values.append(value)
+
+        signal.connect(callback)
+        signal.emit("before")
+
+        signal.disconnect(callback)
+        signal.emit("after")
+
+        assert received_values == ["before"]
+
+    def test_mock_signal_disconnect_all(self):
+        """MockSignalのdisconnect()で全コールバックが切断されることを確認"""
+        signal = MockSignal()
+        received_values = []
+
+        signal.connect(lambda v: received_values.append(v))
+        signal.connect(lambda v: received_values.append(v * 2))
+
+        signal.emit(1)
+        assert len(received_values) == 2
+
+        signal.disconnect()
+        signal.emit(2)
+
+        # disconnect後はコールバックは呼ばれない
+        assert len(received_values) == 2
+
+    def test_mock_signal_emit_without_args(self):
+        """引数なしのemitが正しく動作することを確認"""
+        signal = MockSignal()
+        call_count = [0]
+
+        def callback():
+            call_count[0] += 1
+
+        signal.connect(callback)
+        signal.emit()
+
+        assert call_count[0] == 1
+
+    def test_mock_signal_emit_with_multiple_args(self):
+        """複数引数のemitが正しく動作することを確認"""
+        signal = MockSignal()
+        received_args = []
+
+        def callback(a, b, c):
+            received_args.append((a, b, c))
+
+        signal.connect(callback)
+        signal.emit(1, 2, 3)
+
+        assert received_args == [(1, 2, 3)]
