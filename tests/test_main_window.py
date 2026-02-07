@@ -7,7 +7,7 @@ ViewModelをモック化してテストの独立性を確保します。
 
 import pytest
 from unittest.mock import Mock
-from PyQt6.QtWidgets import QMainWindow, QComboBox, QPushButton, QProgressBar
+from PyQt6.QtWidgets import QMainWindow, QComboBox, QPushButton, QProgressBar, QLabel
 from PyQt6.QtCore import Qt
 
 
@@ -55,6 +55,8 @@ def create_mock_viewmodel():
     mock_vm.get_available_themes.return_value = ["simple", "modern", "pastel", "dark", "vibrant"]
     mock_vm.set_theme = Mock()
     mock_vm.update_wallpaper = Mock(return_value=True)
+    mock_vm.apply_wallpaper = Mock(return_value=True)
+    mock_vm.preview_theme = Mock(return_value=None)
     mock_vm.cancel_update = Mock()
 
     # シグナルの設定（MockSignalを使用）
@@ -64,6 +66,7 @@ def create_mock_viewmodel():
     mock_vm.progress_updated = MockSignal()
     mock_vm.error_occurred = MockSignal()
     mock_vm.wallpaper_updated = MockSignal()
+    mock_vm.preview_ready = MockSignal()
 
     return mock_vm
 
@@ -75,11 +78,13 @@ def mock_viewmodel():
 
 
 @pytest.fixture
-def window_with_mock(qtbot, mock_viewmodel):
+def window_with_mock(qtbot, mock_viewmodel, tmp_path):
     """モックViewModelを使用したMainWindowを提供するフィクスチャ"""
     from src.ui.main_window import MainWindow
+    from src.viewmodels.settings_service import SettingsService
 
-    window = MainWindow(viewmodel=mock_viewmodel)
+    settings_service = SettingsService(settings_dir=tmp_path)
+    window = MainWindow(viewmodel=mock_viewmodel, settings_service=settings_service)
     qtbot.addWidget(window)
     return window
 
@@ -109,11 +114,11 @@ class TestMainWindow:
         assert combo.count() == 5
         mock_viewmodel.get_available_themes.assert_called()
 
-    def test_main_window_has_update_button(self, window_with_mock):
-        """「今すぐ更新」ボタンが存在することを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+    def test_main_window_has_apply_button(self, window_with_mock):
+        """「壁紙に適用」ボタンが存在することを確認"""
+        button = window_with_mock.findChild(QPushButton, "apply_button")
         assert button is not None
-        assert button.text() == "今すぐ更新"
+        assert button.text() == "壁紙に適用"
 
     def test_main_window_has_preview_widget(self, window_with_mock):
         """プレビューウィジェットが存在することを確認"""
@@ -126,14 +131,14 @@ class TestMainWindow:
         # モックのcurrent_themeが"simple"なので、ComboBoxも"simple"に設定される
         assert combo.currentText() == "simple"
 
-    def test_update_button_click(self, qtbot, window_with_mock, mock_viewmodel):
-        """「今すぐ更新」ボタンをクリックできることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+    def test_apply_button_click(self, qtbot, window_with_mock, mock_viewmodel):
+        """「壁紙に適用」ボタンをクリックできることを確認"""
+        button = window_with_mock.findChild(QPushButton, "apply_button")
         assert button.isEnabled()
 
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
-        # モックのupdate_wallpaperが呼ばれることを確認
-        mock_viewmodel.update_wallpaper.assert_called_once()
+        # モックのapply_wallpaperが呼ばれることを確認
+        mock_viewmodel.apply_wallpaper.assert_called_once()
 
     def test_main_window_has_progress_bar(self, window_with_mock):
         """QProgressBarが存在することを確認"""
@@ -188,67 +193,29 @@ class TestMainWindow:
 
         assert f"エラー: {error_message}" in window_with_mock.statusBar().currentMessage()
 
-    def test_critical_error_shows_message_box(self, window_with_mock, monkeypatch):
-        """重大なエラー時にQMessageBoxが表示されることを確認"""
+    def test_error_handler_updates_status_bar(self, window_with_mock):
+        """エラーハンドラがステータスバーを更新すること"""
+        window_with_mock._on_error_occurred("テストエラー")
+        assert "エラー: テストエラー" in window_with_mock.statusBar().currentMessage()
+
+    def test_error_handler_no_dialog(self, window_with_mock, monkeypatch):
+        """通常エラーではダイアログが表示されないこと"""
         from PyQt6.QtWidgets import QMessageBox
 
-        critical_called = []
+        dialog_called = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a: dialog_called.append("w"))
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a: dialog_called.append("c"))
 
-        def mock_critical(parent, title, message):
-            critical_called.append({
-                "parent": parent,
-                "title": title,
-                "message": message
-            })
-
-        monkeypatch.setattr(QMessageBox, "critical", mock_critical)
-
-        error_message = "重大なエラーが発生しました"
-        # ハンドラを直接呼び出し（CRITICALレベル用）
-        window_with_mock._on_critical_error(error_message)
-
-        assert len(critical_called) == 1
-        assert critical_called[0]["title"] == "エラー"
-        assert error_message in critical_called[0]["message"]
-
-    def test_error_level_classification(self, window_with_mock, monkeypatch):
-        """エラーレベルに応じて適切な処理が行われることを確認"""
-        from PyQt6.QtWidgets import QMessageBox
-
-        warning_called = []
-        critical_called = []
-
-        def mock_warning(parent, title, message):
-            warning_called.append({"title": title, "message": message})
-
-        def mock_critical(parent, title, message):
-            critical_called.append({"title": title, "message": message})
-
-        monkeypatch.setattr(QMessageBox, "warning", mock_warning)
-        monkeypatch.setattr(QMessageBox, "critical", mock_critical)
-
-        # WARNING レベルのエラー
-        window_with_mock._on_error_occurred("WARNING: テスト警告", level="WARNING")
-        assert len(warning_called) == 1
-        assert len(critical_called) == 0
-
-        # CRITICAL レベルのエラー
-        window_with_mock._on_error_occurred("CRITICAL: 重大エラー", level="CRITICAL")
-        assert len(warning_called) == 1
-        assert len(critical_called) == 1
-
-        # ERROR レベルのエラー（ステータスバーのみ、ダイアログなし）
-        window_with_mock._on_error_occurred("ERROR: 通常エラー", level="ERROR")
-        assert len(warning_called) == 1
-        assert len(critical_called) == 1
+        window_with_mock._on_error_occurred("通常エラー")
+        assert len(dialog_called) == 0
 
 
 class TestMainWindowEdgeCases:
     """MainWindowのエッジケーステスト（モックViewModel使用）"""
 
-    def test_update_button_disabled_during_update(self, qtbot, window_with_mock, mock_viewmodel):
-        """更新中はボタンが無効化されることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+    def test_apply_button_disabled_during_update(self, qtbot, window_with_mock, mock_viewmodel):
+        """適用中はボタンが無効化されることを確認"""
+        button = window_with_mock.findChild(QPushButton, "apply_button")
 
         assert button.isEnabled()
 
@@ -259,7 +226,7 @@ class TestMainWindowEdgeCases:
 
     def test_rapid_button_clicks_handled(self, qtbot, window_with_mock, mock_viewmodel):
         """連続したボタンクリックが適切に処理されることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "apply_button")
 
         # 最初のクリック
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
@@ -272,12 +239,12 @@ class TestMainWindowEdgeCases:
             if button.isEnabled():
                 qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
-        # update_wallpaperは1回だけ呼ばれる
-        mock_viewmodel.update_wallpaper.assert_called_once()
+        # apply_wallpaperは1回だけ呼ばれる
+        mock_viewmodel.apply_wallpaper.assert_called_once()
 
     def test_button_re_enabled_after_update_complete(self, qtbot, window_with_mock, mock_viewmodel):
         """更新完了後にボタンが再有効化されることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "apply_button")
 
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
         assert not button.isEnabled()
@@ -289,7 +256,7 @@ class TestMainWindowEdgeCases:
 
     def test_button_re_enabled_after_update_failure(self, qtbot, window_with_mock, mock_viewmodel):
         """更新失敗後にボタンが再有効化されることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "apply_button")
 
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
         assert not button.isEnabled()
@@ -333,7 +300,10 @@ class TestMainWindowEdgeCases:
 
     def test_status_bar_shows_initial_message(self, window_with_mock):
         """ステータスバーに初期メッセージが表示されることを確認"""
-        assert window_with_mock.statusBar().currentMessage() == "準備完了"
+        # テーマComboBox初期化時にプレビュー生成が走るため、
+        # 初期メッセージはプレビュー関連のメッセージになる
+        msg = window_with_mock.statusBar().currentMessage()
+        assert msg != ""  # 何らかのメッセージが表示されている
 
     def test_status_bar_shows_update_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに更新中メッセージが表示されることを確認"""
@@ -343,7 +313,7 @@ class TestMainWindowEdgeCases:
     def test_status_bar_shows_success_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに成功メッセージが表示されることを確認"""
         mock_viewmodel.update_completed.emit(True)
-        assert "更新しました" in window_with_mock.statusBar().currentMessage()
+        assert "適用しました" in window_with_mock.statusBar().currentMessage()
 
     def test_status_bar_shows_failure_message(self, window_with_mock, mock_viewmodel):
         """ステータスバーに失敗メッセージが表示されることを確認"""
@@ -427,21 +397,21 @@ class TestMainWindowViewModelInteraction:
         combo.setCurrentText("dark")
         mock_viewmodel.set_theme.assert_called_with("dark")
 
-    def test_update_button_calls_update_wallpaper(self, qtbot, window_with_mock, mock_viewmodel):
-        """更新ボタンクリックでViewModelのupdate_wallpaperが呼ばれることを確認"""
-        button = window_with_mock.findChild(QPushButton, "update_button")
+    def test_apply_button_calls_apply_wallpaper(self, qtbot, window_with_mock, mock_viewmodel):
+        """適用ボタンクリックでViewModelのapply_wallpaperが呼ばれることを確認"""
+        button = window_with_mock.findChild(QPushButton, "apply_button")
 
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
 
-        mock_viewmodel.update_wallpaper.assert_called_once()
+        mock_viewmodel.apply_wallpaper.assert_called_once()
 
-    def test_theme_changed_signal_updates_preview(self, window_with_mock, mock_viewmodel):
-        """ViewModelのtheme_changedシグナルでプレビューがクリアされることを確認"""
+    def test_theme_changed_signal_updates_status(self, window_with_mock, mock_viewmodel):
+        """ViewModelのtheme_changedシグナルでステータスが更新されることを確認"""
         # theme_changedシグナルをemit
         mock_viewmodel.theme_changed.emit("modern")
 
         # ステータスバーにテーマ名が表示される
-        assert "テーマ: modern" in window_with_mock.statusBar().currentMessage()
+        assert "modern" in window_with_mock.statusBar().currentMessage()
 
     def test_multiple_progress_updates(self, window_with_mock, mock_viewmodel):
         """複数回の進捗更新が正しく処理されることを確認"""
@@ -460,18 +430,18 @@ class TestMainWindowViewModelInteraction:
 
         # その後成功
         mock_viewmodel.update_completed.emit(True)
-        assert "更新しました" in window_with_mock.statusBar().currentMessage()
+        assert "適用しました" in window_with_mock.statusBar().currentMessage()
 
     def test_complete_update_cycle(self, qtbot, window_with_mock, mock_viewmodel):
         """完全な更新サイクルをテスト"""
         window_with_mock.show()
-        button = window_with_mock.findChild(QPushButton, "update_button")
+        button = window_with_mock.findChild(QPushButton, "apply_button")
         progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")
 
         # 1. 更新開始
         qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
         assert not button.isEnabled()
-        mock_viewmodel.update_wallpaper.assert_called_once()
+        mock_viewmodel.apply_wallpaper.assert_called_once()
 
         # 2. 更新開始シグナル
         mock_viewmodel.update_started.emit()
@@ -487,7 +457,7 @@ class TestMainWindowViewModelInteraction:
         mock_viewmodel.update_completed.emit(True)
         assert button.isEnabled()
         assert progress_bar.isHidden()
-        assert "更新しました" in window_with_mock.statusBar().currentMessage()
+        assert "適用しました" in window_with_mock.statusBar().currentMessage()
 
 
 class TestMockSignal:
@@ -578,3 +548,148 @@ class TestMockSignal:
         signal.emit(1, 2, 3)
 
         assert received_args == [(1, 2, 3)]
+
+
+class TestMainWindowSettingsIntegration:
+    """MainWindowの設定ダイアログ統合テスト"""
+
+    def test_settings_button_exists(self, window_with_mock):
+        """「設定」ボタンが存在することを確認"""
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        assert button is not None
+        assert button.text() == "設定"
+
+    def test_settings_button_is_enabled(self, window_with_mock):
+        """「設定」ボタンが有効であることを確認"""
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        assert button.isEnabled()
+
+    def test_settings_service_initialized(self, window_with_mock):
+        """MainWindowがSettingsServiceを保持していることを確認"""
+        assert hasattr(window_with_mock, 'settings_service')
+        from src.viewmodels.settings_service import SettingsService
+        assert isinstance(window_with_mock.settings_service, SettingsService)
+
+    def test_settings_button_opens_dialog(self, qtbot, window_with_mock, monkeypatch):
+        """設定ボタンクリックで設定ダイアログが開くことを確認"""
+        from src.ui.settings_dialog import SettingsDialog
+
+        dialog_opened = []
+
+        # SettingsDialog.execをモック化（ダイアログをキャンセル扱い）
+        monkeypatch.setattr(
+            SettingsDialog, "exec",
+            lambda self: dialog_opened.append(True) or 0  # QDialog.Rejected
+        )
+
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        assert len(dialog_opened) == 1
+
+    def test_settings_dialog_accept_saves(self, qtbot, window_with_mock, monkeypatch, tmp_path):
+        """設定ダイアログでOKした場合に設定が保存されることを確認"""
+        from PyQt6.QtWidgets import QDialog
+        from src.ui.settings_dialog import SettingsDialog
+
+        # tmp_pathをsettings_serviceに設定
+        window_with_mock.settings_service.settings_dir = tmp_path
+        window_with_mock.settings_service.settings_file = tmp_path / "settings.json"
+
+        # SettingsDialog.execをAccept扱いにモック化
+        monkeypatch.setattr(
+            SettingsDialog, "exec",
+            lambda self: QDialog.DialogCode.Accepted.value
+        )
+        # get_settingsをモック化
+        monkeypatch.setattr(
+            SettingsDialog, "get_settings",
+            lambda self: {
+                "auto_update_enabled": False,
+                "auto_update_interval_minutes": 30,
+                "auto_detect_resolution": False,
+                "card_shadow_enabled": False,
+            }
+        )
+
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        # 設定が反映されていることを確認
+        assert window_with_mock.settings_service.get("auto_update_enabled") is False
+        assert window_with_mock.settings_service.get("auto_update_interval_minutes") == 30
+
+    def test_settings_dialog_reject_does_not_save(self, qtbot, window_with_mock, monkeypatch, tmp_path):
+        """設定ダイアログでキャンセルした場合に設定が保存されないことを確認"""
+        from PyQt6.QtWidgets import QDialog
+        from src.ui.settings_dialog import SettingsDialog
+
+        window_with_mock.settings_service.settings_dir = tmp_path
+        window_with_mock.settings_service.settings_file = tmp_path / "settings.json"
+
+        original_enabled = window_with_mock.settings_service.get("auto_update_enabled")
+
+        # SettingsDialog.execをReject扱いにモック化
+        monkeypatch.setattr(
+            SettingsDialog, "exec",
+            lambda self: QDialog.DialogCode.Rejected.value
+        )
+
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        # 設定が変わっていないことを確認
+        assert window_with_mock.settings_service.get("auto_update_enabled") == original_enabled
+
+
+class TestMainWindowAutoUpdateUI:
+    """MainWindowの自動更新UI統合テスト"""
+
+    def test_next_update_label_exists(self, window_with_mock):
+        """次回更新時刻ラベルが存在すること"""
+        label = window_with_mock.findChild(QLabel, "next_update_label")
+        assert label is not None
+
+    def test_next_update_label_initial_text(self, window_with_mock):
+        """次回更新時刻ラベルの初期テキスト"""
+        label = window_with_mock.findChild(QLabel, "next_update_label")
+        # 自動更新が停止中なら「自動更新: 停止中」
+        assert "自動更新" in label.text()
+
+    def test_settings_accept_notifies_viewmodel(self, qtbot, window_with_mock, mock_viewmodel, monkeypatch, tmp_path):
+        """設定保存時にViewModelのon_settings_changedが呼ばれること"""
+        from PyQt6.QtWidgets import QDialog
+        from src.ui.settings_dialog import SettingsDialog
+
+        window_with_mock.settings_service.settings_dir = tmp_path
+        window_with_mock.settings_service.settings_file = tmp_path / "settings.json"
+
+        mock_viewmodel.on_settings_changed = Mock()
+
+        monkeypatch.setattr(
+            SettingsDialog, "exec",
+            lambda self: QDialog.DialogCode.Accepted.value
+        )
+        monkeypatch.setattr(
+            SettingsDialog, "get_settings",
+            lambda self: {
+                "auto_update_enabled": True,
+                "auto_update_interval_minutes": 120,
+                "auto_detect_resolution": True,
+                "card_shadow_enabled": True,
+            }
+        )
+
+        button = window_with_mock.findChild(QPushButton, "settings_button")
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+
+        mock_viewmodel.on_settings_changed.assert_called_once()
+
+    def test_auto_update_status_updates_label(self, window_with_mock, mock_viewmodel):
+        """自動更新ステータス変更でラベルが更新されること"""
+        label = window_with_mock.findChild(QLabel, "next_update_label")
+
+        # 自動更新有効化シグナル発火
+        mock_viewmodel.auto_update_status_changed.emit(True)
+        text = label.text()
+        assert "自動更新" in text

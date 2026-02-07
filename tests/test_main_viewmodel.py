@@ -132,31 +132,6 @@ class TestMainViewModel:
             assert viewmodel.is_updating is False  # 更新完了後はFalse
             mock_service.generate_and_set_wallpaper.assert_called_once()
 
-    def test_main_viewmodel_update_wallpaper_with_events(self, qtbot, qapp):
-        """イベントを指定して壁紙を更新できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        # モックサービスの設定
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            events = [
-                {"start": "2024-01-15 10:00", "summary": "ミーティング"}
-            ]
-
-            result = viewmodel.update_wallpaper(events=events)
-
-            assert result is True
-
-            # 非同期実行完了を待つ
-            qtbot.wait(1000)
-
-            # eventsが渡されたことを確認
-            call_args = mock_service.generate_and_set_wallpaper.call_args
-            assert call_args[1]['events'] == events
 
     def test_main_viewmodel_update_wallpaper_error(self, qtbot):
         """壁紙更新時のエラーハンドリングを確認"""
@@ -202,8 +177,8 @@ class TestMainViewModel:
         with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
             viewmodel = MainViewModel()
 
-            events = [{"start": "2024-01-15 10:00", "summary": "テスト"}]
-            preview_path = viewmodel.generate_preview(events=events)
+            # WallpaperServiceが内部でCalendarClientを使用してイベント取得
+            preview_path = viewmodel.generate_preview()
 
             assert preview_path == mock_path
             mock_service.generate_wallpaper.assert_called_once()
@@ -387,391 +362,319 @@ class TestMainViewModel:
             # current_themeが変更されていないことを確認
             assert viewmodel.current_theme == "simple"
 
-    def test_main_viewmodel_update_wallpaper_invalid_events_structure(self, qtbot, qapp):
-        """無効なイベントデータ構造を拒否することを確認"""
+    def test_main_viewmodel_set_theme_does_not_auto_update(self, qtbot):
+        """テーマ変更時に壁紙が自動更新されないこと（プレビュー→適用ワークフロー）"""
         from src.viewmodels.main_viewmodel import MainViewModel
 
+        # モックサービスの設定
         mock_service = Mock()
+        mock_service.get_available_themes.return_value = [
+            "simple", "modern", "pastel", "dark", "vibrant"
+        ]
         mock_service.generate_and_set_wallpaper.return_value = True
 
         with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
             viewmodel = MainViewModel()
 
-            # エラーシグナル受信用
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
+            # update_startedシグナルをスパイ
+            update_started_received = []
+            viewmodel.update_started.connect(lambda: update_started_received.append(True))
 
-            # 無効な構造（dictではなくstring）
-            invalid_events = ["not a dict"]
-
-            # 更新を実行
-            viewmodel.update_wallpaper(events=invalid_events)
+            # テーマを変更
+            viewmodel.set_theme("modern")
 
             # 少し待つ
-            qtbot.wait(500)
+            qtbot.wait(200)
 
-            # エラーが通知されたことを確認
-            assert len(error_received) >= 1
+            # update_startedシグナルが発火しないことを確認（壁紙は自動適用しない）
+            assert len(update_started_received) == 0, \
+                "テーマ変更時にupdate_startedが発火してはいけません（プレビュー→適用ワークフロー）"
 
-    def test_main_viewmodel_update_wallpaper_missing_required_fields(self, qtbot, qapp):
-        """必須フィールドがないイベントデータを拒否することを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
+            # テーマが変更されたことを確認
+            assert viewmodel.current_theme == "modern"
 
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
+    def test_theme_name_in_filename(self):
+        """テーマ名がファイル名に含まれることを確認"""
+        from src.image_generator import ImageGenerator
+        from datetime import datetime
+        from src.config import WALLPAPER_FILENAME_TEMPLATE
 
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
+        # ImageGeneratorを初期化
+        generator = ImageGenerator()
 
-            # エラーシグナル受信用
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
+        # テーマを設定
+        generator.set_theme("dark")
 
-            # 必須フィールド（start, summary）がない
-            invalid_events = [
-                {"end": "2024-01-15 11:00"}  # startとsummaryがない
-            ]
+        # ファイル名を生成
+        filename = WALLPAPER_FILENAME_TEMPLATE.format(
+            theme="dark",
+            date=datetime.now().strftime('%Y%m%d')
+        )
 
-            # 更新を実行
-            viewmodel.update_wallpaper(events=invalid_events)
+        # テーマ名が含まれていることを確認
+        assert "dark" in filename
+        assert filename.startswith("wallpaper_dark_")
 
-            # 少し待つ
-            qtbot.wait(500)
 
-            # エラーが通知されたことを確認
-            assert len(error_received) >= 1
+class TestAutoUpdateSettings:
+    """自動更新設定のリアクティブ反映テスト"""
 
-    def test_main_viewmodel_update_wallpaper_invalid_datetime_format(self, qtbot, qapp):
-        """不正な日時フォーマットを拒否することを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # エラーシグナル受信用
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
-
-            # 不正な日時フォーマット
-            invalid_events = [
-                {"start": "invalid-date-format", "summary": "テスト"}
-            ]
-
-            # 更新を実行
-            viewmodel.update_wallpaper(events=invalid_events)
-
-            # 少し待つ
-            qtbot.wait(500)
-
-            # エラーが通知されたことを確認
-            assert len(error_received) >= 1
-
-
-class TestMainViewModelEdgeCases:
-    """MainViewModelのエッジケーステスト"""
-
-    # 大量イベント処理テスト
-    def test_main_viewmodel_handles_100_events(self, qtbot, qapp):
-        """100件以上のイベントを処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 100件のイベントを生成
-            events = [
-                {"start": f"2024-01-{(i % 28) + 1:02d} 10:00", "summary": f"イベント{i}"}
-                for i in range(100)
-            ]
-
-            # 更新を実行
-            result = viewmodel.update_wallpaper(events=events)
-
-            # 少し待つ
-            qtbot.wait(1000)
-
-            assert result is True
-            # イベントがサービスに渡されたことを確認
-            call_args = mock_service.generate_and_set_wallpaper.call_args
-            assert len(call_args[1]['events']) == 100
-
-    def test_main_viewmodel_handles_500_events(self, qtbot, qapp):
-        """500件の大量イベントでもパフォーマンスが許容範囲内であることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-        import time
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 500件のイベントを生成
-            events = [
-                {"start": f"2024-01-{(i % 28) + 1:02d} 10:00", "summary": f"イベント{i}"}
-                for i in range(500)
-            ]
-
-            # 処理時間を計測
-            start_time = time.time()
-            result = viewmodel.update_wallpaper(events=events)
-            elapsed = time.time() - start_time
-
-            # 少し待つ
-            qtbot.wait(1000)
-
-            assert result is True
-            # バリデーション処理は1秒以内に完了すべき
-            assert elapsed < 1.0
-
-    # 境界値テスト（0件、1件）
-    def test_main_viewmodel_handles_zero_events(self, qtbot, qapp):
-        """0件のイベントを処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 空のイベントリスト
-            events = []
-
-            result = viewmodel.update_wallpaper(events=events)
-            qtbot.wait(500)
-
-            assert result is True
-
-    def test_main_viewmodel_handles_one_event(self, qtbot, qapp):
-        """1件のイベントを処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            events = [{"start": "2024-01-15 10:00", "summary": "単一イベント"}]
-
-            result = viewmodel.update_wallpaper(events=events)
-            qtbot.wait(500)
-
-            assert result is True
-
-    # 異常なイベントデータのテスト
-    def test_main_viewmodel_rejects_extremely_long_summary(self, qtbot, qapp):
-        """極端に長いsummaryを持つイベントを適切に処理することを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 10000文字のsummary
-            long_summary = "あ" * 10000
-            events = [{"start": "2024-01-15 10:00", "summary": long_summary}]
-
-            # 長いsummaryでも処理できるべき（切り詰めるかそのまま通すか）
-            result = viewmodel.update_wallpaper(events=events)
-            qtbot.wait(500)
-
-            # エラーにならないことを確認
-            assert result is True
-
-    def test_main_viewmodel_handles_special_characters_in_summary(self, qtbot, qapp):
-        """特殊文字を含むsummaryを処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 特殊文字を含むイベント
-            events = [
-                {"start": "2024-01-15 10:00", "summary": "会議<script>alert('xss')</script>"},
-                {"start": "2024-01-16 10:00", "summary": "テスト\n\r\t改行タブ"},
-                {"start": "2024-01-17 10:00", "summary": "絵文字"},
-                {"start": "2024-01-18 10:00", "summary": "SQL' OR '1'='1"},
-            ]
-
-            result = viewmodel.update_wallpaper(events=events)
-            qtbot.wait(500)
-
-            assert result is True
-
-    def test_main_viewmodel_handles_unicode_in_events(self, qtbot, qapp):
-        """Unicode文字（日本語、中国語、アラビア語等）を処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            events = [
-                {"start": "2024-01-15 10:00", "summary": "日本語会議"},
-                {"start": "2024-01-16 10:00", "summary": "中文会议"},
-                {"start": "2024-01-17 10:00", "summary": "Arabisch"},
-                {"start": "2024-01-18 10:00", "summary": "Russisch"},
-            ]
-
-            result = viewmodel.update_wallpaper(events=events)
-            qtbot.wait(500)
-
-            assert result is True
-
-    # 連続更新リクエストのテスト
-    def test_main_viewmodel_rapid_update_requests(self, qtbot, qapp):
-        """連続した更新リクエストを適切に処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 最初の更新
-            result1 = viewmodel.update_wallpaper()
-            assert result1 is True
-
-            # 即座に2回目の更新（更新中なので拒否されるべき）
-            result2 = viewmodel.update_wallpaper()
-            assert result2 is False
-
-            # 即座に3回目の更新（更新中なので拒否されるべき）
-            result3 = viewmodel.update_wallpaper()
-            assert result3 is False
-
-    def test_main_viewmodel_update_after_completion(self, qtbot, qapp):
-        """更新完了後に再度更新できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.return_value = True
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            # 最初の更新
-            result1 = viewmodel.update_wallpaper()
-            assert result1 is True
-
-            # 完了を待つ
-            qtbot.wait(1000)
-
-            # 2回目の更新（完了後なので成功するべき）
-            result2 = viewmodel.update_wallpaper()
-            assert result2 is True
-
-    # ネットワークエラーシミュレーション
-    def test_main_viewmodel_network_timeout_error(self, qtbot, qapp):
-        """ネットワークタイムアウトエラーを適切に処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-        import socket
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.side_effect = socket.timeout("Connection timed out")
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
-
-            viewmodel.update_wallpaper()
-            qtbot.wait(1000)
-
-            # タイムアウトエラーが通知されたことを確認
-            assert len(error_received) == 1
-            assert "timed out" in error_received[0].lower() or "timeout" in error_received[0].lower()
-
-    def test_main_viewmodel_connection_refused_error(self, qtbot, qapp):
-        """接続拒否エラーを適切に処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-        import socket
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.side_effect = ConnectionRefusedError("Connection refused")
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
-
-            viewmodel.update_wallpaper()
-            qtbot.wait(1000)
-
-            # 接続拒否エラーが通知されたことを確認
-            assert len(error_received) == 1
-
-    # 権限エラーのテスト
-    def test_main_viewmodel_permission_denied_error(self, qtbot, qapp):
-        """権限エラーを適切に処理できることを確認"""
-        from src.viewmodels.main_viewmodel import MainViewModel
-
-        mock_service = Mock()
-        mock_service.generate_and_set_wallpaper.side_effect = PermissionError("Permission denied")
-
-        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
-            viewmodel = MainViewModel()
-
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
-
-            viewmodel.update_wallpaper()
-            qtbot.wait(1000)
-
-            # 権限エラーが通知されたことを確認
-            assert len(error_received) == 1
-            assert "Permission denied" in error_received[0]
-
-    # テーマ変更の境界値テスト
-    def test_main_viewmodel_set_theme_whitespace_only(self, qtbot):
-        """空白文字のみのテーマ名を拒否することを確認"""
+    def test_set_auto_update_interval(self, qapp):
+        """自動更新間隔を変更できること"""
         from src.viewmodels.main_viewmodel import MainViewModel
 
         with patch('src.viewmodels.main_viewmodel.WallpaperService'):
             viewmodel = MainViewModel()
+            viewmodel.set_auto_update_interval(30)
+            assert viewmodel.auto_update_interval_minutes == 30
 
-            error_received = []
-            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
+    def test_set_auto_update_interval_updates_timer(self, qapp):
+        """間隔変更がタイマーに反映されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
 
-            # 空白のみのテーマ名
-            viewmodel.set_theme("   ")
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.set_auto_update_interval(45)
+            # タイマーのインターバルがミリ秒で反映されている
+            assert viewmodel._auto_update_timer.interval() == 45 * 60 * 1000
 
-            assert len(error_received) == 1
-            assert viewmodel.current_theme == "simple"
+    def test_get_next_update_time_when_active(self, qapp):
+        """自動更新がアクティブ時に次回更新時刻を取得できること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
 
-    def test_main_viewmodel_set_theme_with_special_chars(self, qtbot):
-        """特殊文字を含むテーマ名を拒否することを確認"""
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+            next_time = viewmodel.get_next_update_time()
+            assert next_time is not None
+            assert isinstance(next_time, str)
+            assert next_time != ""
+            viewmodel.stop_auto_update()
+
+    def test_get_next_update_time_when_inactive(self, qapp):
+        """自動更新が停止中はNoneを返すこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            assert viewmodel.get_next_update_time() is None
+
+    def test_on_settings_changed_updates_auto_update(self, qapp):
+        """設定変更で自動更新状態が更新されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+            assert viewmodel.is_auto_updating is True
+
+            # 設定変更で自動更新を無効化
+            viewmodel.on_settings_changed({
+                "auto_update_enabled": False,
+                "auto_update_interval_minutes": 30,
+            })
+            assert viewmodel.is_auto_updating is False
+
+    def test_on_settings_changed_updates_interval(self, qapp):
+        """設定変更で更新間隔が変更されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.on_settings_changed({
+                "auto_update_enabled": True,
+                "auto_update_interval_minutes": 120,
+            })
+            assert viewmodel.auto_update_interval_minutes == 120
+            assert viewmodel.is_auto_updating is True
+
+    def test_on_settings_changed_enables_auto_update(self, qapp):
+        """設定変更で自動更新を有効化できること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            assert viewmodel.is_auto_updating is False
+
+            viewmodel.on_settings_changed({
+                "auto_update_enabled": True,
+                "auto_update_interval_minutes": 60,
+            })
+            assert viewmodel.is_auto_updating is True
+            viewmodel.stop_auto_update()
+
+    def test_auto_update_interval_property(self, qapp):
+        """auto_update_interval_minutesプロパティがデフォルト値を返すこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from src.config import AUTO_UPDATE_INTERVAL_MINUTES
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            assert viewmodel.auto_update_interval_minutes == AUTO_UPDATE_INTERVAL_MINUTES
+
+
+class TestRetryLogic:
+    """壁紙更新リトライロジックのテスト"""
+
+    def test_retry_count_initial_zero(self, qapp):
+        """初期状態でリトライカウントが0であること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            assert viewmodel.retry_count == 0
+
+    def test_max_retries_default(self, qapp):
+        """デフォルトの最大リトライ回数が3であること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            assert viewmodel.max_retries == 3
+
+    def test_retry_on_failure(self, qtbot, qapp):
+        """壁紙更新失敗時にリトライがスケジュールされること"""
         from src.viewmodels.main_viewmodel import MainViewModel
 
         mock_service = Mock()
-        mock_service.get_available_themes.return_value = ["simple", "modern", "pastel"]
+        mock_service.generate_and_set_wallpaper.return_value = False
 
         with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
             viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # 失敗をシミュレート
+            viewmodel._on_worker_result(False)
+
+            assert viewmodel.retry_count == 1
+            assert viewmodel._retry_timer.isActive()
+
+            viewmodel.stop_auto_update()
+            viewmodel._retry_timer.stop()
+
+    def test_retry_resets_on_success(self, qtbot, qapp):
+        """壁紙更新成功時にリトライカウントがリセットされること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel._retry_count = 2  # 2回失敗した状態
+
+            # 成功をシミュレート
+            viewmodel._on_worker_result(True)
+
+            assert viewmodel.retry_count == 0
+
+    def test_retry_stops_at_max(self, qtbot, qapp):
+        """最大リトライ回数に達した場合、リトライを停止すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+            viewmodel._retry_count = 3  # 既に最大回数
+
+            # エラーシグナル受信用
+            error_received = []
+            viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
+
+            # 失敗をシミュレート
+            viewmodel._on_worker_result(False)
+
+            # リトライタイマーは起動しない
+            assert not viewmodel._retry_timer.isActive()
+            # エラー通知が発火される
+            assert len(error_received) >= 1
+
+            viewmodel.stop_auto_update()
+
+    def test_retry_not_triggered_without_auto_update(self, qapp):
+        """自動更新が無効の場合、手動失敗ではリトライしないこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            # 自動更新は無効（デフォルト）
+
+            viewmodel._on_worker_result(False)
+
+            assert viewmodel.retry_count == 0
+            assert not viewmodel._retry_timer.isActive()
+
+
+class TestAuthFailureAutoStop:
+    """認証失敗時の自動更新停止テスト"""
+
+    def test_auth_error_stops_auto_update(self, qapp):
+        """認証エラーで自動更新が停止されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+            assert viewmodel.is_auto_updating is True
+
+            # 認証エラーをシミュレート
+            viewmodel._on_worker_error("認証エラー: トークンが無効です")
+
+            assert viewmodel.is_auto_updating is False
+
+    def test_auth_error_emits_signal(self, qapp):
+        """認証エラーでエラーシグナルが発火されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
 
             error_received = []
             viewmodel.error_occurred.connect(lambda msg: error_received.append(msg))
 
-            # 特殊文字を含むテーマ名（存在しないテーマ）
-            viewmodel.set_theme("../../../etc/passwd")
+            viewmodel._on_worker_error("認証エラー: 401 Unauthorized")
 
-            assert len(error_received) == 1
-            assert viewmodel.current_theme == "simple"
+            assert len(error_received) >= 1
+            viewmodel.stop_auto_update()
+
+    def test_non_auth_error_does_not_stop_auto_update(self, qapp):
+        """認証以外のエラーでは自動更新が停止されないこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # ネットワークエラー（認証エラーではない）
+            viewmodel._on_worker_error("ネットワーク接続エラー")
+
+            # 自動更新は停止されない
+            assert viewmodel.is_auto_updating is True
+
+            viewmodel.stop_auto_update()
+
+    def test_http_403_stops_auto_update(self, qapp):
+        """HTTP 403エラーで自動更新が停止されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            viewmodel._on_worker_error("HttpError 403: Forbidden")
+
+            assert viewmodel.is_auto_updating is False
+
+

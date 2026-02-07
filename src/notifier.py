@@ -4,11 +4,12 @@
 """
 import logging
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Set
 
 from plyer import notification
 
 from .config import NOTIFICATION_ADVANCE_MINUTES
+from .models.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class Notifier:
 
     def __init__(self):
         self.advance_minutes = NOTIFICATION_ADVANCE_MINUTES
+        self.notified_event_ids: Set[str] = set()
 
     def send_notification(
         self,
@@ -52,7 +54,7 @@ class Notifier:
             logger.error(f"通知送信エラー: {e}")
             return False
 
-    def check_upcoming_events(self, events: List[Dict]) -> None:
+    def check_upcoming_events(self, events: List[CalendarEvent]) -> None:
         """
         今後の予定をチェックして通知が必要なイベントを通知
 
@@ -64,10 +66,10 @@ class Notifier:
 
         for event in events:
             # 終日イベントはスキップ
-            if event['is_all_day']:
+            if event.is_all_day:
                 continue
 
-            start_time = event['start_datetime']
+            start_time = event.start_datetime
 
             # タイムゾーンをローカルに変換（必要に応じて）
             if start_time.tzinfo:
@@ -77,9 +79,12 @@ class Notifier:
             time_until_event = (start_time - now).total_seconds() / 60
 
             if 0 < time_until_event <= self.advance_minutes:
+                # 通知済みのイベントはスキップ
+                if event.id in self.notified_event_ids:
+                    continue
                 self._send_event_notification(event, int(time_until_event))
 
-    def _send_event_notification(self, event: Dict, minutes_until: int) -> None:
+    def _send_event_notification(self, event: CalendarEvent, minutes_until: int) -> None:
         """
         特定のイベントについて通知を送信
 
@@ -88,16 +93,26 @@ class Notifier:
             minutes_until: 開始までの分数
         """
         title = f"予定開始 {minutes_until}分前"
-        start_time = event['start_datetime'].strftime('%H:%M')
-        summary = event['summary']
-        location = event.get('location', '')
+        start_time = event.start_datetime.strftime('%H:%M')
+        summary = event.summary
+        location = event.location
 
         if location:
             message = f"{start_time} - {summary}\n場所: {location}"
         else:
             message = f"{start_time} - {summary}"
 
-        self.send_notification(title, message)
+        success = self.send_notification(title, message)
+        if success:
+            self.notified_event_ids.add(event.id)
+
+    def clear_notified_ids(self) -> None:
+        """
+        通知済みイベントIDをクリア
+
+        日付変更時やリセットが必要な場合に使用する。
+        """
+        self.notified_event_ids = set()
 
     def send_update_notification(self) -> None:
         """

@@ -1,14 +1,17 @@
 """
-CalendarClient のセキュリティテスト
+CalendarClient のテスト
+セキュリティ・イベント解析・今日の予定取得に関するテスト
 """
 import os
 import stat
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 import pytest
 
 from src.calendar_client import CalendarClient
 from src.config import TOKEN_PATH
+from src.models.event import CalendarEvent
+from datetime import datetime, timezone, timedelta
 
 
 class TestTokenSecurity:
@@ -82,3 +85,777 @@ class TestTokenSecurity:
         """
         # TODO: 既存ファイルのパーミッションチェック機能を実装する場合のテスト
         pass
+
+
+class TestEventParsing:
+    """イベント解析に関するテスト"""
+
+    def test_parse_event_returns_calendar_event(self):
+        """_parse_eventがCalendarEventオブジェクトを返すことを確認"""
+        client = CalendarClient()
+
+        # Google Calendar APIから取得されるイベントデータのモック
+        api_event = {
+            'id': 'event123',
+            'summary': 'ミーティング',
+            'start': {
+                'dateTime': '2026-02-05T14:00:00+09:00'
+            },
+            'end': {
+                'dateTime': '2026-02-05T15:00:00+09:00'
+            },
+            'location': 'オンライン',
+            'description': '定例会議',
+            'colorId': '5'
+        }
+
+        result = client._parse_event(api_event, 'primary')
+
+        # CalendarEventオブジェクトが返される
+        assert isinstance(result, CalendarEvent)
+        assert result.id == 'event123'
+        assert result.summary == 'ミーティング'
+        assert result.calendar_id == 'primary'
+        assert result.location == 'オンライン'
+        assert result.description == '定例会議'
+        assert result.color_id == '5'
+        assert result.is_all_day is False
+
+    def test_parse_all_day_event(self):
+        """終日イベントを正しく解析できることを確認"""
+        client = CalendarClient()
+
+        api_event = {
+            'id': 'event456',
+            'summary': '休暇',
+            'start': {
+                'date': '2026-02-07'
+            },
+            'end': {
+                'date': '2026-02-08'
+            }
+        }
+
+        result = client._parse_event(api_event, 'personal')
+
+        assert isinstance(result, CalendarEvent)
+        assert result.summary == '休暇'
+        assert result.is_all_day is True
+
+    def test_parse_event_with_missing_optional_fields(self):
+        """オプションフィールドが欠けているイベントを解析できることを確認"""
+        client = CalendarClient()
+
+        api_event = {
+            'id': 'event789',
+            'summary': 'タスク',
+            'start': {
+                'dateTime': '2026-02-05T09:00:00+09:00'
+            },
+            'end': {
+                'dateTime': '2026-02-05T10:00:00+09:00'
+            }
+        }
+
+        result = client._parse_event(api_event, 'work')
+
+        assert isinstance(result, CalendarEvent)
+        assert result.summary == 'タスク'
+        assert result.location == ''
+        assert result.description == ''
+        assert result.color_id == '1'  # デフォルト値
+
+    def test_get_events_returns_list_of_calendar_events(self):
+        """get_eventsがCalendarEventのリストを返すことを確認"""
+        client = CalendarClient()
+
+        # serviceを直接Mockに置き換え
+        client.service = Mock()
+
+        # APIレスポンスのモック
+        mock_events_result = {
+            'items': [
+                {
+                    'id': 'event1',
+                    'summary': 'イベント1',
+                    'start': {'dateTime': '2026-02-05T10:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-05T11:00:00+09:00'}
+                },
+                {
+                    'id': 'event2',
+                    'summary': 'イベント2',
+                    'start': {'dateTime': '2026-02-05T14:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-05T15:00:00+09:00'}
+                }
+            ]
+        }
+
+        mock_list = Mock()
+        mock_list.execute.return_value = mock_events_result
+        client.service.events.return_value.list.return_value = mock_list
+
+        with patch('src.calendar_client.CALENDAR_IDS', ['primary']):
+            result = client.get_events(days=7)
+
+        # CalendarEventのリストが返される
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all(isinstance(event, CalendarEvent) for event in result)
+        assert result[0].summary == 'イベント1'
+        assert result[1].summary == 'イベント2'
+
+
+class TestGetTodayEvents:
+    """
+    H-3: 「今日の予定」が当日全件になっていない問題のテスト
+
+    問題: timeMin=now のため、既に開始した予定や終日予定が取得されない
+    期待: 当日00:00~23:59:59の全予定を取得する
+    """
+
+    def _make_mock_client_with_events(self, api_events):
+        """テスト用ヘルパー: APIレスポンスをモックしたクライアントを作成"""
+        client = CalendarClient()
+        client.service = Mock()
+
+        mock_events_result = {'items': api_events}
+        mock_list = Mock()
+        mock_list.execute.return_value = mock_events_result
+        client.service.events.return_value.list.return_value = mock_list
+
+        return client
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_includes_already_started_events(self, mock_datetime):
+        """
+        既に開始済みのイベントが取得できることを確認
+
+        シナリオ: 現在15:00、10:00-11:00のミーティングが取得されるべき
+        """
+        # 現在時刻を2026-02-05 15:00:00 JSTに固定
+        mock_now = datetime(2026, 2, 5, 15, 0, 0)
+        mock_now_utc = datetime(2026, 2, 5, 6, 0, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        # 10:00-11:00の既に終了したイベント（取得されるべき）
+        api_events = [
+            {
+                'id': 'past_event',
+                'summary': '朝のミーティング',
+                'start': {'dateTime': '2026-02-05T10:00:00+09:00'},
+                'end': {'dateTime': '2026-02-05T11:00:00+09:00'}
+            },
+            {
+                'id': 'future_event',
+                'summary': '夕方の会議',
+                'start': {'dateTime': '2026-02-05T17:00:00+09:00'},
+                'end': {'dateTime': '2026-02-05T18:00:00+09:00'}
+            }
+        ]
+
+        client = self._make_mock_client_with_events(api_events)
+        result = client.get_today_events()
+
+        # 既に開始済みのイベントも含め、2件取得されるべき
+        assert len(result) == 2
+        summaries = [e.summary for e in result]
+        assert '朝のミーティング' in summaries
+        assert '夕方の会議' in summaries
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_includes_all_day_events(self, mock_datetime):
+        """
+        終日イベントが取得できることを確認
+
+        シナリオ: 今日が休暇の終日イベントが設定されている
+        """
+        mock_now = datetime(2026, 2, 5, 15, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        api_events = [
+            {
+                'id': 'allday_event',
+                'summary': '休暇',
+                'start': {'date': '2026-02-05'},
+                'end': {'date': '2026-02-06'}
+            }
+        ]
+
+        client = self._make_mock_client_with_events(api_events)
+        result = client.get_today_events()
+
+        # 終日イベントが取得されるべき
+        assert len(result) == 1
+        assert result[0].summary == '休暇'
+        assert result[0].is_all_day is True
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_api_called_with_day_start(self, mock_datetime):
+        """
+        APIが当日00:00:00をtimeMinとして呼び出されることを確認
+
+        これが修正の核心: timeMinがnow()ではなく、当日の00:00:00であるべき
+        """
+        mock_now = datetime(2026, 2, 5, 15, 30, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        client = CalendarClient()
+        client.service = Mock()
+
+        mock_list = Mock()
+        mock_list.execute.return_value = {'items': []}
+        client.service.events.return_value.list.return_value = mock_list
+
+        client.get_today_events()
+
+        # API呼び出しのtimeMin/timeMaxパラメータを検証
+        call_kwargs = client.service.events.return_value.list.call_args
+        time_min_arg = call_kwargs.kwargs.get('timeMin') or call_kwargs[1].get('timeMin')
+        time_max_arg = call_kwargs.kwargs.get('timeMax') or call_kwargs[1].get('timeMax')
+
+        # timeMinは当日の00:00:00を含むべき（時刻部分の検証）
+        assert '00:00:00' in time_min_arg, \
+            f"timeMinが当日の00:00:00ではない: {time_min_arg}"
+
+        # timeMaxは当日の23:59:59または翌日00:00:00を含むべき
+        assert '2026-02-05' in time_min_arg, \
+            f"timeMinの日付が今日(2026-02-05)ではない: {time_min_arg}"
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_excludes_tomorrow_events(self, mock_datetime):
+        """
+        翌日のイベントが除外されることを確認
+        """
+        mock_now = datetime(2026, 2, 5, 15, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        api_events = [
+            {
+                'id': 'today_event',
+                'summary': '今日の予定',
+                'start': {'dateTime': '2026-02-05T10:00:00+09:00'},
+                'end': {'dateTime': '2026-02-05T11:00:00+09:00'}
+            },
+            {
+                'id': 'tomorrow_event',
+                'summary': '明日の予定',
+                'start': {'dateTime': '2026-02-06T10:00:00+09:00'},
+                'end': {'dateTime': '2026-02-06T11:00:00+09:00'}
+            }
+        ]
+
+        client = self._make_mock_client_with_events(api_events)
+        result = client.get_today_events()
+
+        # 今日のイベントのみが取得されるべき
+        summaries = [e.summary for e in result]
+        assert '今日の予定' in summaries
+        assert '明日の予定' not in summaries
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_returns_empty_when_no_events(self, mock_datetime):
+        """
+        今日のイベントがない場合、空リストを返すことを確認
+        """
+        mock_now = datetime(2026, 2, 5, 15, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        client = self._make_mock_client_with_events([])
+        result = client.get_today_events()
+
+        assert result == []
+
+    def test_today_events_returns_empty_when_service_not_initialized(self):
+        """
+        サービス未初期化時に空リストを返すことを確認
+        """
+        client = CalendarClient()
+        # service = None の状態
+
+        result = client.get_today_events()
+
+        assert result == []
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    def test_today_events_returns_empty_on_http_error(self):
+        """
+        API通信エラー時に空リストを返すことを確認
+        """
+        from googleapiclient.errors import HttpError
+
+        client = CalendarClient()
+        client.service = Mock()
+
+        # HttpErrorをシミュレート
+        mock_response = Mock()
+        mock_response.status = 403
+        mock_response.reason = 'Forbidden'
+        client.service.events.return_value.list.return_value.execute.side_effect = \
+            HttpError(mock_response, b'Access denied')
+
+        result = client.get_today_events()
+
+        assert result == []
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    def test_today_events_returns_empty_on_general_exception(self):
+        """
+        予期しない例外時に空リストを返すことを確認
+        """
+        client = CalendarClient()
+        client.service = Mock()
+
+        # 一般的な例外をシミュレート
+        client.service.events.return_value.list.return_value.execute.side_effect = \
+            RuntimeError('ネットワーク接続エラー')
+
+        result = client.get_today_events()
+
+        assert result == []
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary', 'work@group.calendar.google.com'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_from_multiple_calendars(self, mock_datetime):
+        """
+        複数カレンダーからの今日のイベントが統合されることを確認
+        """
+        mock_now = datetime(2026, 2, 5, 10, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        client = CalendarClient()
+        client.service = Mock()
+
+        # カレンダーごとに異なるレスポンスを返す
+        primary_response = {
+            'items': [
+                {
+                    'id': 'personal_event',
+                    'summary': '個人の予定',
+                    'start': {'dateTime': '2026-02-05T09:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-05T10:00:00+09:00'}
+                }
+            ]
+        }
+        work_response = {
+            'items': [
+                {
+                    'id': 'work_event',
+                    'summary': '仕事の予定',
+                    'start': {'dateTime': '2026-02-05T14:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-05T15:00:00+09:00'}
+                }
+            ]
+        }
+
+        # 呼び出しごとに異なるレスポンスを返す
+        mock_list = Mock()
+        mock_list.execute.side_effect = [primary_response, work_response]
+        client.service.events.return_value.list.return_value = mock_list
+
+        result = client.get_today_events()
+
+        assert len(result) == 2
+        summaries = [e.summary for e in result]
+        assert '個人の予定' in summaries
+        assert '仕事の予定' in summaries
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_includes_overnight_event_from_previous_day(self, mock_datetime):
+        """
+        前日開始・当日継続イベントが取得されることを確認
+
+        シナリオ: 前日23:00に開始し、当日01:00に終了するイベント
+        期待: start_datetime < day_end かつ end_datetime > day_start なので含まれるべき
+
+        Codex指摘: event.start_datetime.date() == today では
+        前日開始の継続中イベントが除外される
+        """
+        mock_now = datetime(2026, 2, 5, 10, 0, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+        mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+        # 前日23:00開始、当日01:00終了のイベント
+        # Google Calendar APIは timeMin/timeMax の範囲と重なるイベントを返す
+        api_events = [
+            {
+                'id': 'overnight_event',
+                'summary': '深夜作業',
+                'start': {'dateTime': '2026-02-04T23:00:00+09:00'},
+                'end': {'dateTime': '2026-02-05T01:00:00+09:00'}
+            },
+            {
+                'id': 'normal_event',
+                'summary': '朝のミーティング',
+                'start': {'dateTime': '2026-02-05T09:00:00+09:00'},
+                'end': {'dateTime': '2026-02-05T10:00:00+09:00'}
+            }
+        ]
+
+        client = self._make_mock_client_with_events(api_events)
+        result = client.get_today_events()
+
+        # 前日開始だが当日に跨がるイベントも含まれるべき
+        assert len(result) == 2, \
+            f"前日開始の継続イベントが除外されている: {[e.summary for e in result]}"
+        summaries = [e.summary for e in result]
+        assert '深夜作業' in summaries, \
+            "前日開始・当日跨ぎのイベントが含まれていない"
+        assert '朝のミーティング' in summaries
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_timemax_is_next_day_midnight(self, mock_datetime):
+        """
+        timeMaxパラメータが翌日00:00:00であることを検証
+
+        Codex指摘: timeMaxパラメータが未検証だった
+        期待: timeMaxは翌日の00:00:00（2026-02-06T00:00:00）にタイムゾーンオフセット付き
+        """
+        mock_now = datetime(2026, 2, 5, 15, 30, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        client = CalendarClient()
+        client.service = Mock()
+
+        mock_list = Mock()
+        mock_list.execute.return_value = {'items': []}
+        client.service.events.return_value.list.return_value = mock_list
+
+        client.get_today_events()
+
+        # API呼び出しのtimeMaxパラメータを検証
+        call_kwargs = client.service.events.return_value.list.call_args
+        time_max_arg = call_kwargs.kwargs.get('timeMax') or call_kwargs[1].get('timeMax')
+
+        # timeMaxは翌日(2026-02-06)の00:00:00を含むべき
+        assert '2026-02-06' in time_max_arg, \
+            f"timeMaxが翌日ではない: {time_max_arg}"
+        assert '00:00:00' in time_max_arg, \
+            f"timeMaxが00:00:00ではない: {time_max_arg}"
+
+    @patch('src.calendar_client.CALENDAR_IDS', ['primary'])
+    @patch('src.calendar_client.datetime')
+    def test_today_events_timezone_aware_api_params(self, mock_datetime):
+        """
+        APIパラメータがタイムゾーンawareであることを検証
+
+        Codex指摘: ローカルナイーブに'Z'付与でUTC扱いになるバグ
+        期待: isoformat()でローカルタイムゾーンのオフセットが保持される
+              'Z'サフィックスではなく'+09:00'等のオフセット形式であること
+        """
+        mock_now = datetime(2026, 2, 5, 15, 30, 0)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.combine = datetime.combine
+        mock_datetime.min = datetime.min
+        mock_datetime.max = datetime.max
+        mock_datetime.fromisoformat = datetime.fromisoformat
+
+        client = CalendarClient()
+        client.service = Mock()
+
+        mock_list = Mock()
+        mock_list.execute.return_value = {'items': []}
+        client.service.events.return_value.list.return_value = mock_list
+
+        client.get_today_events()
+
+        # API呼び出しパラメータを取得
+        call_kwargs = client.service.events.return_value.list.call_args
+        time_min_arg = call_kwargs.kwargs.get('timeMin') or call_kwargs[1].get('timeMin')
+        time_max_arg = call_kwargs.kwargs.get('timeMax') or call_kwargs[1].get('timeMax')
+
+        # ナイーブdatetime + 'Z' の形式ではないことを確認
+        # 正しいISO 8601形式: オフセット付き（例: +09:00, +00:00）
+        # 不正な形式: ナイーブローカル時刻 + 'Z'（例: 2026-02-05T00:00:00Z）
+        assert not time_min_arg.endswith('Z'), \
+            f"timeMinがナイーブ+Z形式で不正: {time_min_arg}（ローカル時刻にZを付けるとUTC扱いになる）"
+        assert not time_max_arg.endswith('Z'), \
+            f"timeMaxがナイーブ+Z形式で不正: {time_max_arg}（ローカル時刻にZを付けるとUTC扱いになる）"
+
+        # タイムゾーンオフセットが含まれていることを確認（+HH:MM または -HH:MM）
+        import re
+        tz_pattern = r'[+-]\d{2}:\d{2}$'
+        assert re.search(tz_pattern, time_min_arg), \
+            f"timeMinにタイムゾーンオフセットがない: {time_min_arg}"
+        assert re.search(tz_pattern, time_max_arg), \
+            f"timeMaxにタイムゾーンオフセットがない: {time_max_arg}"
+
+
+class TestIsAuthenticated:
+    """認証状態チェックのテスト"""
+
+    def test_is_authenticated_false_when_no_creds(self):
+        """認証情報がない場合Falseを返す"""
+        client = CalendarClient()
+        assert client.is_authenticated is False
+
+    def test_is_authenticated_false_when_no_service(self):
+        """serviceがない場合Falseを返す"""
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.creds.valid = True
+        # service is None
+        assert client.is_authenticated is False
+
+    def test_is_authenticated_false_when_creds_invalid(self):
+        """認証情報が無効な場合Falseを返す"""
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.creds.valid = False
+        client.service = MagicMock()
+        assert client.is_authenticated is False
+
+    def test_is_authenticated_true_when_valid(self):
+        """認証情報が有効でserviceがある場合Trueを返す"""
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.creds.valid = True
+        client.service = MagicMock()
+        assert client.is_authenticated is True
+
+
+class TestGetCalendarList:
+    """カレンダー一覧取得のテスト"""
+
+    def test_get_calendar_list_returns_list(self):
+        """カレンダー一覧がリストで返される"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {
+            'items': [
+                {
+                    'id': 'primary',
+                    'summary': 'メインカレンダー',
+                    'backgroundColor': '#4285f4',
+                    'selected': True
+                },
+                {
+                    'id': 'work@group.calendar.google.com',
+                    'summary': '仕事用',
+                    'backgroundColor': '#ff6d01',
+                    'selected': True
+                }
+            ]
+        }
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_get_calendar_list_has_required_fields(self):
+        """各カレンダーにid, summary, backgroundColor, selectedが含まれる"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {
+            'items': [
+                {
+                    'id': 'primary',
+                    'summary': 'メインカレンダー',
+                    'backgroundColor': '#4285f4',
+                    'selected': True
+                }
+            ]
+        }
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+
+        assert len(result) == 1
+        cal = result[0]
+        assert cal['id'] == 'primary'
+        assert cal['summary'] == 'メインカレンダー'
+        assert cal['backgroundColor'] == '#4285f4'
+        assert cal['selected'] is True
+
+    def test_get_calendar_list_default_values(self):
+        """オプションフィールドが欠けている場合、デフォルト値が使われる"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {
+            'items': [
+                {
+                    'id': 'primary',
+                    'summary': 'マイカレンダー',
+                    # backgroundColor, selected が欠けている
+                }
+            ]
+        }
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+
+        cal = result[0]
+        assert cal['backgroundColor'] == '#4285f4'  # デフォルト色
+        assert cal['selected'] is True  # デフォルトで選択
+
+    def test_get_calendar_list_empty_when_no_service(self):
+        """サービス未初期化時に空リストを返す"""
+        client = CalendarClient()
+        result = client.get_calendar_list()
+        assert result == []
+
+    def test_get_calendar_list_empty_on_api_error(self):
+        """APIエラー時に空リストを返す"""
+        from googleapiclient.errors import HttpError
+
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = MagicMock()
+        mock_response.status = 403
+        mock_response.reason = 'Forbidden'
+        client.service.calendarList.return_value.list.return_value.execute.side_effect = \
+            HttpError(mock_response, b'Access denied')
+
+        result = client.get_calendar_list()
+        assert result == []
+
+    def test_get_calendar_list_empty_items(self):
+        """itemsが空の場合、空リストを返す"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {'items': []}
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+        assert result == []
+
+    def test_get_calendar_list_skips_no_id(self):
+        """idがないカレンダーは除外される"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {
+            'items': [
+                {'id': 'valid', 'summary': '有効'},
+                {'summary': 'IDなし'},  # idが欠けている
+            ]
+        }
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+        assert len(result) == 1
+        assert result[0]['id'] == 'valid'
+
+    def test_get_calendar_list_missing_summary_uses_default(self):
+        """summaryがないカレンダーにはデフォルト名が付く"""
+        client = CalendarClient()
+        client.service = MagicMock()
+
+        mock_response = {
+            'items': [
+                {'id': 'no_name'},  # summaryが欠けている
+            ]
+        }
+        client.service.calendarList.return_value.list.return_value.execute.return_value = mock_response
+
+        result = client.get_calendar_list()
+        assert len(result) == 1
+        assert result[0]['summary'] == '（名称なし）'
+
+
+class TestLogout:
+    """ログアウト機能のテスト"""
+
+    def test_logout_clears_creds(self):
+        """ログアウト後にcredsがNoneになる"""
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.service = MagicMock()
+
+        client.logout()
+
+        assert client.creds is None
+
+    def test_logout_clears_service(self):
+        """ログアウト後にserviceがNoneになる"""
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.service = MagicMock()
+
+        client.logout()
+
+        assert client.service is None
+
+    def test_logout_deletes_token_file(self, tmp_path):
+        """ログアウト時にトークンファイルが削除される"""
+        token_file = tmp_path / "token.json"
+        token_file.write_text('{"token": "test"}')
+        assert token_file.exists()
+
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.service = MagicMock()
+
+        with patch('src.calendar_client.TOKEN_PATH', token_file):
+            client.logout()
+
+        assert not token_file.exists()
+
+    def test_logout_no_error_when_no_token_file(self, tmp_path):
+        """トークンファイルが存在しない場合もエラーにならない"""
+        token_file = tmp_path / "nonexistent_token.json"
+
+        client = CalendarClient()
+        client.creds = MagicMock()
+        client.service = MagicMock()
+
+        with patch('src.calendar_client.TOKEN_PATH', token_file):
+            client.logout()  # 例外が発生しないことを確認
+
+        assert client.creds is None
+        assert client.service is None
+
+    def test_logout_when_not_authenticated(self):
+        """未認証状態でlogoutしてもエラーにならない"""
+        client = CalendarClient()
+        # creds=None, service=None の状態
+
+        client.logout()  # 例外が発生しないことを確認
+
+        assert client.creds is None
+        assert client.service is None

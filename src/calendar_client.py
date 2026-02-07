@@ -14,6 +14,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS
+from .models.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,15 @@ class CalendarClient:
     def __init__(self):
         self.service = None
         self.creds = None
+
+    @property
+    def is_authenticated(self) -> bool:
+        """認証済みかどうかを返す"""
+        return (
+            self.creds is not None
+            and self.creds.valid
+            and self.service is not None
+        )
 
     def authenticate(self) -> bool:
         """
@@ -70,7 +80,48 @@ class CalendarClient:
             logger.error(f"認証エラー: {e}")
             return False
 
-    def get_events(self, days: int = 7) -> List[Dict]:
+    def get_calendar_list(self) -> List[Dict]:
+        """
+        利用可能なカレンダー一覧を取得
+
+        Returns:
+            List[Dict]: カレンダー情報のリスト（id, summary, backgroundColor, selected）
+        """
+        if not self.service:
+            logger.error("APIサービスが初期化されていません。先にauthenticate()を呼び出してください")
+            return []
+
+        try:
+            result = self.service.calendarList().list().execute()
+            return [{
+                'id': cal.get('id', ''),
+                'summary': cal.get('summary', '（名称なし）'),
+                'backgroundColor': cal.get('backgroundColor', '#4285f4'),
+                'selected': cal.get('selected', True)
+            } for cal in result.get('items', []) if cal.get('id')]
+
+        except HttpError as error:
+            logger.error(f"カレンダー一覧取得APIエラー: {error}")
+            return []
+        except Exception as e:
+            logger.error(f"カレンダー一覧取得エラー: {e}")
+            return []
+
+    def logout(self):
+        """ログアウト（認証情報とトークンファイルを削除）"""
+        self.creds = None
+        self.service = None
+
+        try:
+            if TOKEN_PATH.exists():
+                TOKEN_PATH.unlink()
+                logger.info("トークンファイルを削除しました")
+        except Exception as e:
+            logger.warning(f"トークンファイル削除エラー: {e}")
+
+        logger.info("ログアウトしました")
+
+    def get_events(self, days: int = 7) -> List[CalendarEvent]:
         """
         指定された日数分のイベントを取得
 
@@ -78,7 +129,7 @@ class CalendarClient:
             days: 今日から何日後までのイベントを取得するか（デフォルト: 7日）
 
         Returns:
-            List[Dict]: イベント情報のリスト
+            List[CalendarEvent]: イベント情報のリスト
         """
         if not self.service:
             logger.error("APIサービスが初期化されていません。先にauthenticate()を呼び出してください")
@@ -115,7 +166,7 @@ class CalendarClient:
                 logger.info(f"  → {len(events)}件のイベントを取得")
 
             # 開始時刻でソート
-            all_events.sort(key=lambda x: x['start_datetime'])
+            all_events.sort(key=lambda x: x.start_datetime)
 
             logger.info(f"合計 {len(all_events)}件のイベントを取得しました")
             return all_events
@@ -127,7 +178,7 @@ class CalendarClient:
             logger.error(f"イベント取得エラー: {e}")
             return []
 
-    def _parse_event(self, event: Dict, calendar_id: str) -> Optional[Dict]:
+    def _parse_event(self, event: Dict, calendar_id: str) -> Optional[CalendarEvent]:
         """
         イベント情報を解析して必要な情報を抽出
 
@@ -136,7 +187,7 @@ class CalendarClient:
             calendar_id: カレンダーID
 
         Returns:
-            Dict: 整形されたイベント情報
+            CalendarEvent: 整形されたイベント情報
         """
         try:
             # 開始時刻の取得
@@ -158,48 +209,102 @@ class CalendarClient:
                 start_dt = start_dt.astimezone().replace(tzinfo=None)
                 end_dt = end_dt.astimezone().replace(tzinfo=None)
 
-            # イベント情報を構築
-            event_info = {
-                'id': event['id'],
-                'summary': event.get('summary', '（タイトルなし）'),
-                'start_datetime': start_dt,
-                'end_datetime': end_dt,
-                'is_all_day': is_all_day,
-                'location': event.get('location', ''),
-                'description': event.get('description', ''),
-                'calendar_id': calendar_id,
-                'color_id': event.get('colorId', '1'),  # デフォルトカラー
-            }
-
-            return event_info
+            # CalendarEventオブジェクトを構築
+            return CalendarEvent(
+                id=event['id'],
+                summary=event.get('summary', '（タイトルなし）'),
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                is_all_day=is_all_day,
+                location=event.get('location', ''),
+                description=event.get('description', ''),
+                calendar_id=calendar_id,
+                color_id=event.get('colorId', '1')  # デフォルトカラー
+            )
 
         except Exception as e:
             logger.warning(f"イベント解析エラー ({event.get('summary', 'Unknown')}): {e}")
             return None
 
-    def get_today_events(self) -> List[Dict]:
+    def get_today_events(self) -> List[CalendarEvent]:
         """
-        今日のイベントのみを取得
+        今日のイベントのみを取得（当日全件: 00:00~翌日00:00）
+
+        既に開始済みのイベントや終日イベントも含め、
+        当日に属する全てのイベントを返す。
 
         Returns:
-            List[Dict]: 今日のイベント情報のリスト
+            List[CalendarEvent]: 今日のイベント情報のリスト
         """
-        all_events = self.get_events(days=1)
-        today = datetime.now().date()
+        if not self.service:
+            logger.error("APIサービスが初期化されていません。先にauthenticate()を呼び出してください")
+            return []
 
-        # 今日のイベントをフィルタリング
-        today_events = [
-            event for event in all_events
-            if event['start_datetime'].date() == today
-        ]
+        try:
+            # 当日の時刻範囲: 今日の00:00:00 ~ 翌日の00:00:00（ローカルタイムゾーンaware）
+            today = datetime.now().date()
+            local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+            day_start = datetime.combine(today, datetime.min.time(), tzinfo=local_tz)
+            day_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
 
-        return today_events
+            # ISO 8601形式に変換（タイムゾーンオフセット付き）
+            time_min = day_start.isoformat()
+            time_max = day_end.isoformat()
 
-    def get_week_events(self) -> List[Dict]:
+            all_events = []
+
+            for calendar_id in CALENDAR_IDS:
+                logger.info(f"カレンダー '{calendar_id}' から今日のイベントを取得中...")
+
+                events_result = self.service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+
+                logger.debug(f"取得したイベント数: {len(events_result.get('items', []))}")
+
+                events = events_result.get('items', [])
+
+                for event in events:
+                    event_info = self._parse_event(event, calendar_id)
+                    if event_info:
+                        all_events.append(event_info)
+                        if event_info.is_all_day:
+                            logger.debug(f"終日イベント: {event_info.summary}, 開始: {event_info.start_datetime}")
+
+                logger.info(f"  → {len(events)}件のイベントを取得")
+
+            # 開始時刻でソート
+            all_events.sort(key=lambda x: x.start_datetime)
+
+            # 今日のイベントのみフィルタリング（APIが範囲外を返す可能性への防御）
+            # 重なり判定: イベントが当日の時間帯と重なるかどうか
+            # - 前日開始・当日継続イベントも含める
+            day_start_naive = day_start.replace(tzinfo=None)
+            day_end_naive = day_end.replace(tzinfo=None)
+            today_events = [
+                event for event in all_events
+                if event.start_datetime < day_end_naive and event.end_datetime > day_start_naive
+            ]
+
+            logger.info(f"今日のイベント: {len(today_events)}件")
+            return today_events
+
+        except HttpError as error:
+            logger.error(f"APIエラー: {error}")
+            return []
+        except Exception as e:
+            logger.error(f"今日のイベント取得エラー: {e}")
+            return []
+
+    def get_week_events(self) -> List[CalendarEvent]:
         """
         今週（7日間）のイベントを取得
 
         Returns:
-            List[Dict]: 今週のイベント情報のリスト
+            List[CalendarEvent]: 今週のイベント情報のリスト
         """
         return self.get_events(days=7)

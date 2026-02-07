@@ -16,8 +16,8 @@ TEXT_COLOR = (0, 0, 0)  # 黒文字
 
 # === マルチディスプレイ設定 ===
 # 壁紙を適用するデスクトップ番号
-# 0 = 全デスクトップ（デフォルト動作）
-# 1 = desktop 1のみ（通常は内蔵ディスプレイ/メインディスプレイ）
+# 0 = 全デスクトップ
+# 1 = desktop 1のみ（現在の設定 - 内蔵ディスプレイ/メインディスプレイ）
 # 2 = desktop 2のみ（外部ディスプレイ）
 WALLPAPER_TARGET_DESKTOP = 1
 
@@ -37,6 +37,22 @@ FONT_PATHS = {
         'C:\\Windows\\Fonts\\YuGothM.ttc',
     ],
     'Linux': [  # Linux
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    ]
+}
+
+# Bold用フォントパス（時刻表示など強調部分に使用）
+FONT_PATHS_BOLD = {
+    'Darwin': [  # Mac
+        '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc',
+        '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
+    ],
+    'Windows': [  # Windows
+        'C:\\Windows\\Fonts\\meiryob.ttc',
+        'C:\\Windows\\Fonts\\YuGothB.ttc',
+    ],
+    'Linux': [  # Linux
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc',
         '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
     ]
 }
@@ -76,7 +92,7 @@ CALENDAR_IDS = [
 
 # === 出力設定 ===
 OUTPUT_DIR = BASE_DIR / 'output'
-WALLPAPER_FILENAME_TEMPLATE = 'wallpaper_{date}.png'
+WALLPAPER_FILENAME_TEMPLATE = 'wallpaper_{theme}_{date}.png'
 
 # === スケジュール設定 ===
 # 壁紙更新時刻（24時間形式）
@@ -109,7 +125,7 @@ DESKTOP_ICON_RIGHT_WIDTH_PERCENT = 20  # 右上20%
 SPACING_TOP = 25          # デスクトップエリア〜カード間
 SPACING_MIDDLE = 35       # カード〜週間カレンダー間
 
-# 予定カード設定
+# 予定カード設定（旧レイアウト用、互換性維持）
 CARD_WIDTH = 300
 CARD_HEIGHT = 200         # 150 → 200（複数予定表示対応）
 CARD_MARGIN = 30
@@ -118,6 +134,15 @@ FONT_SIZE_CARD_DATE = 16       # 「今日の予定」ラベル（18→16）
 FONT_SIZE_CARD_TIME = 16       # 時刻（24→16）
 FONT_SIZE_CARD_TITLE = 14      # タイトル（20→14）
 FONT_SIZE_CARD_LOCATION = 12   # 場所（16→12）
+
+# 3列レイアウト用コンパクトカード設定
+COMPACT_CARD_WIDTH = 260       # コンパクトカード幅
+COMPACT_CARD_HEIGHT = 50       # コンパクトカード高さ
+COMPACT_CARD_MARGIN = 5        # カード間余白
+COMPACT_CARD_PADDING = 8       # カード内余白
+MAX_CARDS_PER_COLUMN = 3       # 列あたり最大表示件数
+COLUMN_HEADER_HEIGHT = 25      # 列ヘッダー高さ
+COLUMN_GAP = 20                # 列間余白
 
 # 週間カレンダー設定
 WEEK_CALENDAR_START_HOUR = 8    # 8:00開始
@@ -128,12 +153,26 @@ FONT_SIZE_HOUR_LABEL = 12       # 時間ラベル（視認性向上）
 FONT_SIZE_DAY_HEADER = 16       # 曜日ヘッダー（視認性向上）
 FONT_SIZE_EVENT_BLOCK = 11      # イベントブロック内テキスト（最初の文字が見えるように）
 
+# === 時刻ラベル視認性設定 ===
+# 週間カレンダーの時刻ラベルの描画モード
+# 'label_bg': ラベル部分のみ半透明背景（デフォルト）
+# 'full_bg': カレンダー全体に半透明背景
+# 'outline': アウトライン付きテキスト（stroke）
+# 'none': エフェクトなし（プレーンテキスト）
+LABEL_VISIBILITY_MODES = ['label_bg', 'full_bg', 'outline', 'none']
+LABEL_VISIBILITY_MODE = 'label_bg'
+
 # === デザインテーマ設定 ===
-# 利用可能なテーマ: 'simple', 'fancy', 'stylish'
-# - simple: シンプル系（背景画像使用、黒文字）
-# - fancy: ファンシー系（パステルグラデーション、丸角カード）
-# - stylish: オシャレ系（ダークモード、ゴールドアクセント）
+# 利用可能なテーマ: 'simple', 'modern', 'pastel', 'dark', 'vibrant'
+# - simple: シンプル系（背景画像使用、黒文字、角丸なし）
+# - modern: モダン系（半透明白カード、大きめの角丸、影付き）
+# - pastel: パステル系（淡い色、角丸あり、優しい印象）
+# - dark: ダーク系（半透明黒カード、ゴールドアクセント、高級感）
+# - vibrant: 鮮やか系（鮮やかな色、角丸あり、元気な印象）
 THEME = 'simple'
+
+# カードの影設定
+CARD_SHADOW_ENABLED = True  # カードに影を表示するか（True: 表示、False: 非表示）
 
 # === Google Calendar アイコン設定 ===
 CALENDAR_ICON_PATH = BASE_DIR / 'assets' / 'google_calendar_icon.png'
@@ -149,6 +188,14 @@ ICON_LINUX_POSITION = (IMAGE_WIDTH - 60, 20)  # Linux: Mac同様
 # None の場合は透明背景、パスを指定すると背景画像の上にカレンダーを描画
 BACKGROUND_IMAGE_PATH = BASE_DIR / 'backgrounds' / 'default_background.png'
 # BACKGROUND_IMAGE_PATH = None  # 透明背景の場合
+
+# === 自動更新設定 ===
+AUTO_UPDATE_INTERVAL_MINUTES = 60  # 自動更新間隔（分）
+AUTO_UPDATE_ENABLED_DEFAULT = True  # デフォルトで自動更新を有効にする
+
+# === リトライ設定 ===
+RETRY_MAX_COUNT = 3       # 壁紙更新失敗時の最大リトライ回数
+RETRY_INTERVAL_MINUTES = 5  # リトライ間隔（分）
 
 # === ログ設定 ===
 LOG_LEVEL = 'INFO'

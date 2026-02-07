@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 import logging
 
+from ..calendar_client import CalendarClient
 from ..image_generator import ImageGenerator
 from ..wallpaper_setter import WallpaperSetter
 from .. import themes
@@ -26,35 +27,47 @@ class WallpaperService:
 
     def __init__(self):
         """WallpaperServiceを初期化"""
+        self.calendar_client = CalendarClient()
         self.image_generator = ImageGenerator()
         self.wallpaper_setter = WallpaperSetter()
         logger.info("WallpaperServiceを初期化しました")
 
     def generate_wallpaper(
         self,
-        theme_name: str,
-        events: List[Dict],
-        output_path: Optional[Path] = None
+        theme_name: str
     ) -> Path:
         """
         壁紙画像を生成
 
         Args:
             theme_name: テーマ名（例: "simple", "modern"）
-            events: カレンダーイベントのリスト
-            output_path: 出力パス（省略時は自動生成）
 
         Returns:
             Path: 生成された壁紙画像のパス
+
+        Raises:
+            Exception: 認証失敗またはイベント取得失敗時
         """
         try:
-            logger.info(f"壁紙生成を開始: theme={theme_name}, events={len(events)}件")
+            logger.info(f"壁紙生成を開始: theme={theme_name}")
+
+            # Google Calendar認証
+            if not self.calendar_client.authenticate():
+                raise Exception("Google Calendar API認証に失敗しました")
+
+            # イベント取得
+            today_events = self.calendar_client.get_today_events()
+            week_events = self.calendar_client.get_week_events()
+            logger.info(f"今日の予定: {len(today_events)}件、今週の予定: {len(week_events)}件")
 
             # テーマの設定
-            self.image_generator.theme = themes.get_theme(theme_name)
+            self.image_generator.set_theme(theme_name)
 
             # 壁紙生成
-            image_path = self.image_generator.generate(events, output_path)
+            image_path = self.image_generator.generate_wallpaper(today_events, week_events)
+
+            if not image_path:
+                raise Exception("壁紙画像の生成に失敗しました")
 
             logger.info(f"壁紙生成完了: {image_path}")
             return image_path
@@ -90,24 +103,20 @@ class WallpaperService:
 
     def generate_and_set_wallpaper(
         self,
-        theme_name: str,
-        events: List[Dict],
-        output_path: Optional[Path] = None
+        theme_name: str
     ) -> bool:
         """
         壁紙を生成して設定
 
         Args:
             theme_name: テーマ名
-            events: カレンダーイベントのリスト
-            output_path: 出力パス（省略時は自動生成）
 
         Returns:
             bool: 生成と設定が成功でTrue、失敗でFalse
         """
         try:
             # 壁紙生成
-            image_path = self.generate_wallpaper(theme_name, events, output_path)
+            image_path = self.generate_wallpaper(theme_name)
 
             # 壁紙設定
             result = self.set_wallpaper(image_path)
@@ -117,6 +126,21 @@ class WallpaperService:
         except Exception as e:
             logger.error(f"壁紙生成・設定エラー: {e}")
             return False
+
+    def set_background_image(self, path: Path):
+        """
+        カスタム背景画像パスを設定
+
+        Args:
+            path: 背景画像のパス
+        """
+        self.image_generator.set_background_image(path)
+        logger.info(f"背景画像を設定しました: {path}")
+
+    def reset_background_image(self):
+        """背景画像をデフォルトに戻す"""
+        self.image_generator.reset_background_image()
+        logger.info("背景画像をデフォルトに戻しました")
 
     def get_available_themes(self) -> List[str]:
         """

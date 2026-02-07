@@ -1,228 +1,166 @@
 # カレンダー壁紙アプリ
 
-Google Calendarの予定をデスクトップ壁紙として表示するクロスプラットフォームアプリケーション
+Google Calendarの予定をデスクトップ壁紙として表示するPythonアプリケーション
+
+![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)
+![PyQt6](https://img.shields.io/badge/PyQt6-6.6.1-green.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## 📋 概要
 
-このアプリケーションは、Google Calendarから予定を取得して、デスクトップの壁紙画像として自動生成・設定します。今日の予定と今週の予定を一目で確認できる、シンプルでミニマルなデザインです。
+Google Calendarと連携し、今日と今週の予定を美しい壁紙として自動生成・設定するアプリケーションです。GUIとCLIの両方に対応し、定期的な壁紙更新やイベント通知機能を備えています。
 
-### 主な機能
+## ✨ 主な機能
 
-- ✅ Google Calendarとの連携（複数カレンダー対応）
-- ✅ 今日の予定 + 今週の予定を壁紙として表示
-- ✅ 予定の色分け表示
-- ✅ 予定開始30分前のデスクトップ通知
-- ✅ 1日1回自動更新（デフォルト: 朝6時）
-- ✅ Windows/Mac/Linux対応
+- 📅 **Google Calendar連携**: OAuth2認証で安全にカレンダーデータを取得
+- 🎨 **5種類のテーマ**: simple, modern, pastel, dark, vibrantから選択可能
+- 🖼️ **週間カレンダー表示**: 今日と1週間の予定を見やすく表示
+- 🔔 **イベント通知**: 予定開始5分前に自動通知（デーモンモード）
+- 🖥️ **マルチディスプレイ対応**: 複数モニター環境で柔軟に設定可能
+- 🌐 **GUI/CLI両対応**: 使いやすいGUIインターフェースとコマンドライン操作
+- ⏰ **自動更新**: スケジューラーで毎日自動的に壁紙を更新
 
-## 🚀 セットアップ
+## 🚀 クイックスタート
 
 ### 必要要件
 
-- Python 3.9 以上
-- Google アカウント
-- インターネット接続
+- Python 3.13以上
+- macOS / Linux / Windows
+- Google Calendar アカウント
 
-### 1. リポジトリのクローン
+### インストール
 
 ```bash
+# リポジトリのクローン
 git clone <repository-url>
 cd calender_desktop
-```
 
-### 2. 仮想環境の作成と有効化
-
-**Mac/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-**Windows:**
-```bash
+# 仮想環境の作成と有効化
 python -m venv venv
-venv\Scripts\activate
-```
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-### 3. 依存関係のインストール
-
-```bash
+# 依存パッケージのインストール
 pip install -r requirements.txt
 ```
 
-### 4. Google Calendar API設定
+### Google Calendar API設定
 
-1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. 新しいプロジェクトを作成
-3. 「APIとサービス」→「ライブラリ」から「Google Calendar API」を有効化
-4. 「APIとサービス」→「認証情報」から OAuth 2.0 クライアントIDを作成
-   - アプリケーションの種類: デスクトップアプリ
-5. `credentials.json` をダウンロード
-6. ダウンロードしたファイルを `credentials/credentials.json` に配置
+1. [Google Cloud Console](https://console.cloud.google.com/)でプロジェクトを作成
+2. Google Calendar APIを有効化
+3. OAuth 2.0クライアントIDを作成（デスクトップアプリケーション）
+4. `credentials.json`をダウンロードしてプロジェクトルートに配置
 
-### 5. 初回認証
+### 初回認証
 
 ```bash
+# 認証フローを実行
 python main.py --auth
 ```
 
-ブラウザが開き、Googleアカウントでの認証を求められます。許可すると認証情報が保存されます。
+ブラウザが開き、Googleアカウントでの認証を求められます。
 
-## 💻 使い方
+## 📖 使い方
 
-### 手動実行（テスト用）
-
-壁紙を即座に更新します：
+### GUI版（推奨）
 
 ```bash
-python main.py --run-once
+# GUI起動
+python run_gui.py
 ```
 
-### バックグラウンド実行
+GUI画面で以下の操作が可能：
+- テーマ選択（ドロップダウンメニュー）
+- 壁紙プレビュー表示
+- ワンクリックで壁紙更新
 
-定期的に壁紙を更新し、通知を送信します：
+### CLI版
 
 ```bash
+# 壁紙を即座に更新
+python main.py --run-once
+
+# デーモンモード（毎日6:00に自動更新 + 通知機能）
 python main.py --daemon
 ```
 
-デフォルトでは以下のスケジュールで実行されます：
-- 壁紙更新: 毎日6:00
-- 通知チェック: 5分ごと
+## 🎨 テーマ
 
-停止するには `Ctrl+C` を押してください。
+5種類のデザインテーマから選択可能：
 
-### コマンドライン引数
+| テーマ | 説明 |
+|--------|------|
+| **simple** | シンプル系（背景画像、黒文字、角丸なし） |
+| **modern** | モダン系（半透明白カード、角丸、影付き） |
+| **pastel** | パステル系（淡い色、優しい印象） |
+| **dark** | ダーク系（半透明黒カード、ゴールドアクセント） |
+| **vibrant** | 鮮やか系（鮮やかな色、元気な印象） |
 
-```bash
-python main.py [オプション]
-```
+テーマは`src/config.py`で変更するか、GUIで切り替え可能です。
 
-| オプション | 説明 |
-|-----------|------|
-| `--auth` | Google Calendar API認証のみを実行 |
-| `--run-once` | スケジュール実行せずに1回だけ実行 |
-| `--daemon` | デーモンモードで実行（バックグラウンド定期実行） |
-| `--log-level` | ログレベルを指定（DEBUG, INFO, WARNING, ERROR） |
+## ⚙️ 設定
 
-## ⚙️ 設定のカスタマイズ
-
-[src/config.py](src/config.py) を編集して、以下の設定をカスタマイズできます：
-
-### 画像設定
+主な設定は`src/config.py`で変更できます：
 
 ```python
+# 画像設定
 IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1080
-BACKGROUND_COLOR = (255, 255, 255)  # 白背景
+
+# テーマ
+THEME = 'simple'
+
+# マルチディスプレイ
+WALLPAPER_TARGET_DESKTOP = 1  # 0=全て, 1=desktop1, 2=desktop2
+
+# 通知設定
+NOTIFICATION_ADVANCE_MINUTES = 5  # 予定開始何分前に通知
 ```
 
-### スケジュール設定
+詳細は[USER_GUIDE.md](USER_GUIDE.md)を参照してください。
 
-```python
-UPDATE_TIME = '06:00'  # 壁紙更新時刻
-NOTIFICATION_ADVANCE_MINUTES = 30  # 通知タイミング（予定開始何分前）
+## 🧪 テスト
+
+```bash
+# 全テスト実行
+pytest tests/ -v
+
+# カバレッジ付き
+pytest tests/ --cov=src --cov-report=html
 ```
 
-### カレンダー設定
+テスト結果: ✅ **235テスト全合格**
 
-```python
-CALENDAR_IDS = [
-    'primary',  # 主カレンダー
-    'your-calendar-id@group.calendar.google.com',  # 追加のカレンダー
-]
-```
+## 📚 ドキュメント
 
-## 📁 プロジェクト構成
-
-```
-calender_desktop/
-├── src/
-│   ├── calendar_client.py      # Google Calendar API連携
-│   ├── image_generator.py      # 壁紙画像生成
-│   ├── wallpaper_setter.py     # OS別壁紙設定
-│   ├── notifier.py             # 通知機能
-│   ├── scheduler.py            # 定期実行管理
-│   └── config.py               # 設定ファイル
-├── credentials/
-│   └── credentials.json        # Google API認証情報
-├── output/                     # 生成された壁紙画像
-├── main.py                     # エントリーポイント
-├── requirements.txt            # 依存関係
-└── README.md
-```
+- [ユーザーガイド](USER_GUIDE.md) - 詳細な使い方とトラブルシューティング
+- [開発ドキュメント](docs/) - 実装チケットと設計資料
 
 ## 🔧 トラブルシューティング
 
 ### 認証エラー
 
-**症状**: `認証情報ファイルが見つかりません` エラー
+```bash
+# 認証情報をリセット
+rm token.json
+python main.py --auth
+```
 
-**解決方法**:
-1. `credentials/credentials.json` が存在することを確認
-2. Google Cloud Consoleで正しくOAuth 2.0クライアントIDを作成したか確認
+### フォントエラー
 
-### 壁紙が設定されない
+日本語フォントが見つからない場合、`src/config.py`の`FONT_PATHS`を環境に合わせて修正してください。
 
-**症状**: 画像は生成されるが壁紙が変更されない
+### 詳細なトラブルシューティング
 
-**解決方法**:
-- **Mac**: システム環境設定 → セキュリティとプライバシー でアプリに権限を付与
-- **Windows**: 管理者権限で実行してみる
-- **Linux**: GNOME/KDE以外のデスクトップ環境では動作しない可能性があります
-
-### フォントが表示されない
-
-**症状**: 日本語テキストが豆腐（□）で表示される
-
-**解決方法**:
-1. システムに日本語フォントがインストールされているか確認
-2. `src/config.py` の `FONT_PATHS` を編集して、正しいフォントパスを指定
-
-### API制限エラー
-
-**症状**: `API制限に達しました` エラー
-
-**解決方法**:
-- Google Calendar APIには1日あたり1,000,000リクエストの制限があります
-- 通常の使用では問題ありませんが、短時間に大量のリクエストを送信した場合に発生します
-- しばらく時間を置いてから再実行してください
-
-## 🖥️ システム要件
-
-### 対応OS
-
-- Windows 10/11
-- macOS 10.14 (Mojave) 以降
-- Linux (GNOME/KDE デスクトップ環境)
-
-### 推奨スペック
-
-- CPU: デュアルコア以上
-- RAM: 2GB以上
-- ディスク空き容量: 500MB以上
-
-## 📝 ログファイル
-
-アプリケーションのログは `calendar_app.log` に保存されます。
-
-問題が発生した場合は、このログファイルを確認してください。
-
-## 🤝 貢献
-
-プルリクエストを歓迎します！
-
-バグ報告や機能リクエストは、Issueを作成してください。
+[USER_GUIDE.md](USER_GUIDE.md)の「トラブルシューティング」セクションを参照してください。
 
 ## 📄 ライセンス
 
 MIT License
 
-## 🙏 謝辞
+## 🤝 貢献
 
-このプロジェクトは以下のライブラリを使用しています：
+プルリクエストは歓迎します。大きな変更の場合は、まずissueを開いて変更内容を議論してください。
 
-- [google-api-python-client](https://github.com/googleapis/google-api-python-client)
-- [Pillow](https://python-pillow.org/)
-- [plyer](https://github.com/kivy/plyer)
-- [schedule](https://github.com/dbader/schedule)
+## 📧 サポート
+
+問題が発生した場合は、[Issues](../../issues)で報告してください。

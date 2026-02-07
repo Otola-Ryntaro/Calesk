@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- サービス識別子 -->
+    <key>Label</key>
+    <string>com.user.calendar-wallpaper</string>
+
+    <!-- 実行プログラム -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/tkojima/calender_desktop/venv/bin/python</string>
+        <string>/Users/tkojima/calender_desktop/main.py</string>
+        <string>--run-once</string>
+    </array>
+
+    <!-- 作業ディレクトリ -->
+    <key>WorkingDirectory</key>
+    <string>/Users/tkojima/calender_desktop</string>
+
+    <!-- 毎日06:00に実行 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>6</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!-- 標準出力ログ -->
+    <key>StandardOutPath</key>
+    <string>/Users/tkojima/calender_desktop/launchd.log</string>
+
+    <!-- 標準エラーログ -->
+    <key>StandardErrorPath</key>
+    <string>/Users/tkojima/calender_desktop/launchd.error.log</string>
+
+    <!-- 環境変数 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>

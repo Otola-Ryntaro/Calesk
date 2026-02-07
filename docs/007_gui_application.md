@@ -165,21 +165,25 @@ viewmodels/     # ビジネスロジック（UI ↔ Core の橋渡し）
 - [x] pytest-qtのセットアップ
 - [x] Codexコードレビュー実施（評価: good, スコア: 7/10）
 
-### Phase 2: メインウィンドウとプレビュー
-- [ ] MainWindowの作成（PyQt6）
-- [ ] PreviewWidgetの実装（QLabel/QPixmap使用）
-- [ ] テーマ選択ComboBoxの実装
-- [ ] テーマギャラリー（QListWidget）
-- [ ] リアルタイムプレビュー機能
-- [ ] 「今すぐ更新」ボタンと進捗表示
+### Phase 2: メインウィンドウとプレビュー ✅
 
-### Phase 3: 設定ダイアログ
-- [ ] SettingsDialogの作成
-- [ ] 表示設定タブ（解像度、フォントサイズ）
-- [ ] テーマ設定タブ（影、背景画像選択）
-- [ ] 自動更新設定タブ（時刻、有効/無効）
-- [ ] マルチディスプレイ設定タブ
-- [ ] 設定の永続化（config.py更新）
+- [x] MainWindowの作成（PyQt6）
+- [x] PreviewWidgetの実装（QLabel/QPixmap使用）
+- [x] テーマ選択ComboBoxの実装
+- [x] MainViewModelの実装とMainWindowとの連携
+- [x] 「今すぐ更新」ボタンの実装
+- [x] Codexコードレビュー実施（評価: good, スコア: 7/10）
+- [ ] テーマギャラリー（QListWidget）（Phase 3以降に延期）
+- [ ] リアルタイムプレビュー機能（Phase 3以降に延期）
+- [ ] 進捗表示（QProgressBar）（Phase 3以降に延期）
+
+### Phase 3: 設定ダイアログ ✅
+- [x] SettingsDialogの作成
+- [x] 表示設定タブ（解像度自動検出、カード影設定）
+- [x] 自動更新設定タブ（間隔、有効/無効）
+- [x] 設定の永続化（SettingsService: JSON保存）
+- [x] MainWindowへの統合（設定ボタン追加）
+- [x] キー/型バリデーション、save()の成否返却
 
 ### Phase 4: カレンダー連携UI
 - [ ] CalendarDialogの作成

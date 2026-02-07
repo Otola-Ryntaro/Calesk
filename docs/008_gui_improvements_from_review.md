@@ -247,7 +247,7 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
 - `tests/test_preview_widget.py` ✅ **更新完了（+15テスト）**
 - `claudedocs/code_review_LOW-7.3.md` ✅ **新規作成**
 
-#### 8. UI状態の一貫性
+#### 8. UI状態の一貫性 ✅ **2026-02-05完了**
 **現状の問題**:
 - PreviewWidget で存在しないファイル時に状態が曖昧
 - エラー時の UI リセットが不完全
@@ -258,15 +258,32 @@ Phase 2のCodexレビュー（スコア: 7/10）で指摘された改善点に�
 - 状態遷移の可視化
 
 **実装タスク**:
-- [ ] PreviewWidget に状態管理を追加
-- [ ] エラー時の自動クリア
-- [ ] 状態遷移のテスト
-- [ ] 状態図のドキュメント作成
+- [x] PreviewWidget に状態管理を追加 ✅ **2026-02-05完了**
+- [x] エラー時の自動クリア ✅ **2026-02-05完了**
+- [x] 状態遷移のテスト ✅ **2026-02-05完了**
+- [ ] 状態図のドキュメント作成（オプション）
+
+**実装内容**:
+- PreviewState Enum定義（INITIAL, LOADING, LOADED, ERROR）
+- 状態管理プロパティ追加（`_state`, `state` read-only property）
+- 状態遷移ロジック実装（`_set_state()`, `_handle_error_state()`）
+- エラー時の自動クリア機能（ERROR → INITIAL）
+- +15新規テスト追加（全180テスト全合格）
+- テストカバレッジ91%維持
+- コードレビュー: 10/10 APPROVED
+- コミット: e48031e
+
+**状態遷移パターン**:
+- INITIAL → LOADING → LOADED（画像読み込み成功）
+- INITIAL → LOADING → ERROR → INITIAL（読み込み失敗、自動クリア）
+- LOADED → LOADING → LOADED（画像変更）
+- LOADED → LOADING → ERROR → INITIAL（変更失敗、自動クリア）
+- 任意 → INITIAL（clear_preview()）
 
 **ファイル**:
-- `src/ui/widgets/preview_widget.py`
-- `tests/test_preview_widget.py`
-- `docs/` （状態図）
+- `src/ui/widgets/preview_widget.py` ✅ **更新完了**
+- `tests/test_preview_widget.py` ✅ **更新完了（+15テスト）**
+- `claudedocs/code_review_LOW-8.md` ✅ **新規作成**
 
 ## 実装順序
 
