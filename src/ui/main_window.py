@@ -7,7 +7,8 @@ MVVMパターンにおけるView層。
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QComboBox, QPushButton, QProgressBar, QMessageBox, QFileDialog, QDialog
+    QLabel, QComboBox, QPushButton, QProgressBar, QMessageBox, QFileDialog, QDialog,
+    QSystemTrayIcon, QMenu, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSlot
 from pathlib import Path
@@ -72,6 +73,9 @@ class MainWindow(QMainWindow):
 
         # ViewModelとの接続
         self._connect_viewmodel()
+
+        # システムトレイアイコンの初期化
+        self._setup_tray_icon()
 
         logger.info("MainWindowを初期化しました")
 
@@ -400,16 +404,75 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"エラー: {error_message}")
         logger.error(f"エラーが発生しました: {error_message}")
 
-    def closeEvent(self, event):
+    def _setup_tray_icon(self):
+        """システムトレイアイコンをセットアップ"""
+        # システムトレイが利用可能かチェック
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            logger.warning("システムトレイが利用できません。トレイアイコン機能を無効化します。")
+            self._tray_icon = None
+            return
+
+        # トレイアイコンを作成
+        self._tray_icon = QSystemTrayIcon(self)
+
+        # アイコンを設定（システムのデフォルトアイコンを使用）
+        # NOTE: カスタムアイコンは assets/tray_icon.png に配置可能
+        self._tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+
+        # トレイメニューを作成
+        tray_menu = QMenu(self)
+
+        # 「今すぐ更新」アクション
+        update_action = tray_menu.addAction("今すぐ更新")
+        update_action.triggered.connect(self.viewmodel.update_wallpaper)
+
+        # 「設定」アクション
+        settings_action = tray_menu.addAction("設定")
+        settings_action.triggered.connect(self._on_settings_clicked)
+
+        # セパレータ
+        tray_menu.addSeparator()
+
+        # 「表示」アクション
+        show_action = tray_menu.addAction("表示")
+        show_action.triggered.connect(self._show_window)
+
+        # 「終了」アクション
+        quit_action = tray_menu.addAction("終了")
+        quit_action.triggered.connect(self._quit_application)
+
+        # メニューをトレイアイコンに設定
+        self._tray_icon.setContextMenu(tray_menu)
+
+        # ダブルクリックでウィンドウを表示
+        self._tray_icon.activated.connect(self._on_tray_icon_activated)
+
+        # トレイアイコンを表示
+        self._tray_icon.show()
+
+        logger.info("システムトレイアイコンを初期化しました")
+
+    def _on_tray_icon_activated(self, reason):
         """
-        ウィンドウを閉じる際の処理
+        トレイアイコンのactivatedシグナル処理
 
         Args:
-            event: CloseEvent
+            reason: ActivationReason（DoubleClick等）
         """
-        # 実行中の壁紙更新をキャンセル
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self._show_window()
+
+    def _show_window(self):
+        """トレイからウィンドウを表示"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        logger.info("ウィンドウを表示しました")
+
+    def _perform_shutdown(self):
+        """アプリケーションの終了処理を実行"""
         if self.viewmodel.is_updating:
-            logger.info("ウィンドウを閉じる前に壁紙更新をキャンセルします")
+            logger.info("終了前に壁紙更新をキャンセルします")
             self.viewmodel.cancel_update()
 
             # QThreadPoolのすべてのワーカーが終了するまで待機（最大3秒）
@@ -418,5 +481,31 @@ class MainWindow(QMainWindow):
             if not thread_pool.waitForDone(3000):  # 3秒のタイムアウト
                 logger.warning("一部のワーカーがタイムアウト内に終了しませんでした")
 
-        logger.info("アプリケーションを終了します")
-        event.accept()
+        self.viewmodel.cleanup()
+
+    def _quit_application(self):
+        """アプリケーションを終了"""
+        logger.info("トレイメニューから終了を選択しました")
+        self._perform_shutdown()
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        """
+        ウィンドウを閉じる際の処理
+
+        トレイアイコンが有効な場合は、ウィンドウを非表示にするだけで
+        アプリケーションは終了しません。
+
+        Args:
+            event: CloseEvent
+        """
+        # トレイアイコンが有効な場合は非表示にするだけ
+        if self._tray_icon is not None and self._tray_icon.isVisible():
+            event.ignore()
+            self.hide()
+            logger.info("ウィンドウをトレイに格納しました")
+        else:
+            # トレイアイコンが無効な場合は通常の終了処理
+            self._perform_shutdown()
+            logger.info("アプリケーションを終了します")
+            event.accept()

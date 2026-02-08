@@ -693,3 +693,144 @@ class TestMainWindowAutoUpdateUI:
         mock_viewmodel.auto_update_status_changed.emit(True)
         text = label.text()
         assert "自動更新" in text
+
+
+class TestSystemTrayIcon:
+    """システムトレイアイコン機能のテスト"""
+
+    def test_tray_icon_initialized(self, window_with_mock):
+        """トレイアイコンが初期化されること"""
+        from PyQt6.QtWidgets import QSystemTrayIcon
+
+        # トレイアイコンが存在する
+        assert hasattr(window_with_mock, '_tray_icon')
+        assert isinstance(window_with_mock._tray_icon, QSystemTrayIcon)
+        # トレイアイコンが表示されている
+        assert window_with_mock._tray_icon.isVisible()
+
+    def test_tray_menu_has_actions(self, window_with_mock):
+        """トレイメニューに必要なアクションが存在すること"""
+        tray_menu = window_with_mock._tray_icon.contextMenu()
+
+        # メニューが存在する
+        assert tray_menu is not None
+
+        # アクションを取得
+        actions = tray_menu.actions()
+
+        # 4つのアクション（今すぐ更新/設定/表示/終了、セパレータ除く）
+        action_texts = [action.text() for action in actions if not action.isSeparator()]
+        assert len(action_texts) >= 4
+        assert "今すぐ更新" in action_texts
+        assert "設定" in action_texts
+        assert "表示" in action_texts
+        assert "終了" in action_texts
+
+    def test_tray_update_now_action(self, window_with_mock, mock_viewmodel):
+        """「今すぐ更新」アクションでupdate_wallpaperが呼ばれること"""
+        tray_menu = window_with_mock._tray_icon.contextMenu()
+        actions = tray_menu.actions()
+
+        # 「今すぐ更新」アクションを探す
+        update_action = None
+        for action in actions:
+            if action.text() == "今すぐ更新":
+                update_action = action
+                break
+
+        assert update_action is not None
+
+        # アクションをトリガー
+        update_action.trigger()
+
+        # update_wallpaperが呼ばれる
+        mock_viewmodel.update_wallpaper.assert_called_once()
+
+    def test_tray_show_action(self, window_with_mock):
+        """「表示」アクションでウィンドウが表示されること"""
+        # ウィンドウを非表示にする
+        window_with_mock.hide()
+        assert not window_with_mock.isVisible()
+
+        tray_menu = window_with_mock._tray_icon.contextMenu()
+        actions = tray_menu.actions()
+
+        # 「表示」アクションを探す
+        show_action = None
+        for action in actions:
+            if action.text() == "表示":
+                show_action = action
+                break
+
+        assert show_action is not None
+
+        # アクションをトリガー
+        show_action.trigger()
+
+        # ウィンドウが表示される
+        assert window_with_mock.isVisible()
+
+    def test_close_event_hides_window(self, window_with_mock, qtbot):
+        """closeEventでウィンドウが非表示になる（終了しない）"""
+        from PyQt6.QtGui import QCloseEvent
+
+        # ウィンドウを表示
+        window_with_mock.show()
+        qtbot.waitExposed(window_with_mock)
+        assert window_with_mock.isVisible()
+
+        # closeEventを発火
+        close_event = QCloseEvent()
+        window_with_mock.closeEvent(close_event)
+
+        # イベントが無視される（終了しない）
+        assert close_event.isAccepted() is False
+
+        # ウィンドウが非表示になる
+        assert not window_with_mock.isVisible()
+
+    def test_tray_icon_double_click_shows_window(self, window_with_mock, qtbot):
+        """トレイアイコンダブルクリックでウィンドウが表示されること"""
+        from PyQt6.QtWidgets import QSystemTrayIcon
+
+        # ウィンドウを非表示にする
+        window_with_mock.hide()
+        assert not window_with_mock.isVisible()
+
+        # トレイアイコンのactivatedシグナルを発火（DoubleClick）
+        window_with_mock._tray_icon.activated.emit(QSystemTrayIcon.ActivationReason.DoubleClick)
+
+        # ウィンドウが表示される
+        assert window_with_mock.isVisible()
+
+    def test_quit_action_closes_application(self, window_with_mock, qtbot, monkeypatch, mock_viewmodel):
+        """「終了」アクションでアプリケーションが終了すること"""
+        from PyQt6.QtWidgets import QApplication
+
+        # QApplication.quitをモック化
+        quit_called = []
+
+        def mock_quit():
+            quit_called.append(True)
+
+        monkeypatch.setattr(QApplication, 'quit', mock_quit)
+
+        tray_menu = window_with_mock._tray_icon.contextMenu()
+        actions = tray_menu.actions()
+
+        # 「終了」アクションを探す
+        quit_action = None
+        for action in actions:
+            if action.text() == "終了":
+                quit_action = action
+                break
+
+        assert quit_action is not None
+
+        # アクションをトリガー
+        quit_action.trigger()
+
+        # QApplication.quitが呼ばれる
+        assert len(quit_called) == 1
+        # viewmodel.cleanup()も呼ばれる
+        mock_viewmodel.cleanup.assert_called_once()
