@@ -678,3 +678,186 @@ class TestAuthFailureAutoStop:
             assert viewmodel.is_auto_updating is False
 
 
+class TestSleepWakeDetection:
+    """スリープ復帰検知機能のテスト"""
+
+    def test_sleep_check_timer_initialized(self, qapp):
+        """スリープチェックタイマーが1分間隔で初期化されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            # スリープチェックタイマーが存在する
+            assert hasattr(viewmodel, '_sleep_check_timer')
+            # 1分間隔（60秒 = 60000ミリ秒）
+            assert viewmodel._sleep_check_timer.interval() == 60 * 1000
+            # 最後のチェック時刻が記録されている
+            assert hasattr(viewmodel, '_last_check_time')
+
+    def test_normal_wake_no_update(self, qapp, qtbot):
+        """通常の1分経過では壁紙更新しない"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # update_wallpaperをモック化
+            viewmodel.update_wallpaper = Mock()
+
+            # 1分経過をシミュレート（通常のタイマー発火）
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=65)
+            viewmodel._on_sleep_check()
+
+            # update_wallpaperは呼ばれない
+            viewmodel.update_wallpaper.assert_not_called()
+
+            viewmodel.stop_auto_update()
+
+    def test_at_threshold_no_update(self, qapp, qtbot):
+        """閾値未満（119秒）では壁紙更新しない"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+        from src.config import SLEEP_WAKE_THRESHOLD_SECONDS
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # update_wallpaperをモック化
+            viewmodel.update_wallpaper = Mock()
+
+            # 閾値-1秒（119秒）をシミュレート
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=SLEEP_WAKE_THRESHOLD_SECONDS - 1)
+            viewmodel._on_sleep_check()
+
+            # elapsed_seconds > THRESHOLD なので、119秒は更新されない
+            viewmodel.update_wallpaper.assert_not_called()
+
+            viewmodel.stop_auto_update()
+
+    def test_just_over_threshold_triggers_update(self, qapp, qtbot):
+        """閾値を1秒超えたら壁紙更新する"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+        from src.config import SLEEP_WAKE_THRESHOLD_SECONDS
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # update_wallpaperをモック化
+            viewmodel.update_wallpaper = Mock()
+
+            # 閾値+1秒（121秒）をシミュレート
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=SLEEP_WAKE_THRESHOLD_SECONDS + 1)
+            viewmodel._on_sleep_check()
+
+            # update_wallpaperが呼ばれる
+            viewmodel.update_wallpaper.assert_called_once()
+
+            viewmodel.stop_auto_update()
+
+    def test_sleep_wake_triggers_immediate_update(self, qapp, qtbot):
+        """スリープ復帰時（3分以上経過）は即座に壁紙更新"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # update_wallpaperをモック化
+            viewmodel.update_wallpaper = Mock()
+
+            # 3分以上経過をシミュレート（スリープ復帰）
+            viewmodel._last_check_time = datetime.now() - timedelta(minutes=5)
+            viewmodel._on_sleep_check()
+
+            # update_wallpaperが呼ばれる
+            viewmodel.update_wallpaper.assert_called_once()
+
+            viewmodel.stop_auto_update()
+
+    def test_sleep_wake_only_when_auto_update_enabled(self, qapp, qtbot):
+        """自動更新OFF時はスリープ復帰検知しない"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+
+        mock_service = Mock()
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService', return_value=mock_service):
+            viewmodel = MainViewModel()
+            # 自動更新を開始しない（停止状態）
+
+            # update_wallpaperをモック化
+            viewmodel.update_wallpaper = Mock()
+
+            # 3分以上経過をシミュレート
+            viewmodel._last_check_time = datetime.now() - timedelta(minutes=5)
+            viewmodel._on_sleep_check()
+
+            # update_wallpaperは呼ばれない（自動更新OFFのため）
+            viewmodel.update_wallpaper.assert_not_called()
+
+    def test_cleanup_stops_sleep_check_timer(self, qapp):
+        """cleanup時にスリープチェックタイマーも停止すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # タイマーが動いていることを確認
+            assert viewmodel._sleep_check_timer.isActive()
+
+            # cleanup実行
+            viewmodel.cleanup()
+
+            # タイマーが停止している
+            assert not viewmodel._sleep_check_timer.isActive()
+
+    def test_sleep_check_starts_with_auto_update(self, qapp):
+        """自動更新開始時にスリープチェックタイマーも開始すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            # 初期状態では停止
+            assert not viewmodel._sleep_check_timer.isActive()
+
+            # 自動更新開始
+            viewmodel.start_auto_update()
+
+            # スリープチェックタイマーも開始
+            assert viewmodel._sleep_check_timer.isActive()
+
+            viewmodel.stop_auto_update()
+
+    def test_sleep_check_stops_with_auto_update(self, qapp):
+        """自動更新停止時にスリープチェックタイマーも停止すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # タイマーが動いている
+            assert viewmodel._sleep_check_timer.isActive()
+
+            # 自動更新停止
+            viewmodel.stop_auto_update()
+
+            # スリープチェックタイマーも停止
+            assert not viewmodel._sleep_check_timer.isActive()

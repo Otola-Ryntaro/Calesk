@@ -8,6 +8,7 @@ MVVMパターンにおけるViewModel層。
 from PyQt6.QtCore import pyqtSignal, QThreadPool, QTimer
 from pathlib import Path
 from typing import List, Optional, Dict
+from datetime import datetime
 import logging
 
 from src.viewmodels.base_viewmodel import ViewModelBase
@@ -81,6 +82,13 @@ class MainViewModel(ViewModelBase):
 
         # 認証エラー検出キーワード
         self._auth_error_keywords = ["認証", "401", "403", "unauthorized", "forbidden"]
+
+        # スリープ復帰検知タイマー
+        from src.config import SLEEP_CHECK_INTERVAL_SECONDS
+        self._sleep_check_timer = QTimer(self)
+        self._sleep_check_timer.setInterval(SLEEP_CHECK_INTERVAL_SECONDS * 1000)
+        self._sleep_check_timer.timeout.connect(self._on_sleep_check)
+        self._last_check_time = datetime.now()
 
         logger.info("MainViewModelを初期化しました")
 
@@ -423,12 +431,15 @@ class MainViewModel(ViewModelBase):
     def start_auto_update(self):
         """自動更新を開始"""
         self._auto_update_timer.start()
+        self._sleep_check_timer.start()
+        self._last_check_time = datetime.now()
         self.auto_update_status_changed.emit(True)
         logger.info("自動更新を開始しました")
 
     def stop_auto_update(self):
         """自動更新を停止"""
         self._auto_update_timer.stop()
+        self._sleep_check_timer.stop()
         self.auto_update_status_changed.emit(False)
         logger.info("自動更新を停止しました")
 
@@ -479,12 +490,38 @@ class MainViewModel(ViewModelBase):
         logger.info("自動更新タイマーが発火しました")
         self.update_wallpaper()
 
+    def _on_sleep_check(self):
+        """
+        スリープ復帰検知のチェック処理
+
+        前回チェック時刻から大幅に時間が経過している場合（>2分）、
+        スリープから復帰したと判定し、即座に壁紙更新を実行する。
+        """
+        from src.config import SLEEP_WAKE_THRESHOLD_SECONDS
+
+        current_time = datetime.now()
+        elapsed_seconds = (current_time - self._last_check_time).total_seconds()
+
+        if elapsed_seconds > SLEEP_WAKE_THRESHOLD_SECONDS:
+            # スリープ復帰検知
+            logger.info(f"スリープ復帰を検知しました（経過時間: {elapsed_seconds:.1f}秒）")
+
+            # 自動更新が有効な場合のみ壁紙更新
+            if self.is_auto_updating:
+                logger.info("スリープ復帰により即座に壁紙更新を実行します")
+                self.update_wallpaper()
+
+        # 最後のチェック時刻を更新
+        self._last_check_time = current_time
+
     def cleanup(self):
         """リソースの解放（タイマー停止等）"""
         if self._auto_update_timer.isActive():
             self._auto_update_timer.stop()
         if self._retry_timer.isActive():
             self._retry_timer.stop()
+        if self._sleep_check_timer.isActive():
+            self._sleep_check_timer.stop()
         if self._preview_debounce_timer.isActive():
             self._preview_debounce_timer.stop()
         if self._current_worker:

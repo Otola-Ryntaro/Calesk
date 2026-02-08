@@ -197,6 +197,10 @@ AUTO_UPDATE_ENABLED_DEFAULT = True  # デフォルトで自動更新を有効に
 RETRY_MAX_COUNT = 3       # 壁紙更新失敗時の最大リトライ回数
 RETRY_INTERVAL_MINUTES = 5  # リトライ間隔（分）
 
+# === スリープ復帰検知設定 ===
+SLEEP_CHECK_INTERVAL_SECONDS = 60   # スリープ復帰チェック間隔（秒）
+SLEEP_WAKE_THRESHOLD_SECONDS = 120  # スリープ復帰と判定する閾値（秒）
+
 # === ログ設定 ===
 LOG_LEVEL = 'INFO'
 LOG_FILE = BASE_DIR / 'calendar_app.log'
