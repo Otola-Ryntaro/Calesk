@@ -1380,3 +1380,365 @@ class TestMultipleAccountsEvents:
 
         # 時系列でソートされている
         assert events[0].start_datetime < events[1].start_datetime
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_load_accounts_refresh_token_chmod(self, mock_creds_class, mock_build, tmp_path):
+        """load_accounts()でトークンリフレッシュ後にchmod 600が設定される"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # トークンファイル作成（緩い権限で）
+        token_file = token_dir / "token_account_1.json"
+        token_file.write_text('{"token": "test1", "refresh_token": "refresh1"}')
+        token_file.chmod(0o644)  # 意図的に緩い権限
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock credentials - expired and requires refresh
+        mock_creds = MagicMock()
+        mock_creds.valid = False
+        mock_creds.expired = True
+        mock_creds.refresh_token = "refresh1"
+
+        # refresh()後にvalidになる
+        def refresh_side_effect(request):
+            mock_creds.valid = True
+
+        mock_creds.refresh = MagicMock(side_effect=refresh_side_effect)
+        mock_creds.to_json.return_value = '{"token": "refreshed", "refresh_token": "refresh1"}'
+
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            client.load_accounts()
+
+        # トークンファイルの権限が600になっていることを確認
+        import stat
+        file_stat = token_file.stat()
+        file_mode = stat.filemode(file_stat.st_mode)
+        # 600 = rw-------
+        assert oct(file_stat.st_mode & 0o777) == '0o600', f"Expected 0o600, got {oct(file_stat.st_mode & 0o777)}"
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_load_accounts_rejects_path_traversal(self, mock_creds_class, mock_build, tmp_path):
+        """load_accounts()がパストラバーサル攻撃を拒否する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # 正常なトークンファイル
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+
+        # 攻撃的なパスを含むaccounts.json
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_safe",
+                    "email": "safe@gmail.com",
+                    "token_file": "token_account_1.json",  # 正常
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "安全"
+                },
+                {
+                    "id": "account_traversal",
+                    "email": "attack1@gmail.com",
+                    "token_file": "../../../etc/passwd",  # パストラバーサル
+                    "enabled": True,
+                    "color": "#ea4335",
+                    "display_name": "攻撃1"
+                },
+                {
+                    "id": "account_absolute",
+                    "email": "attack2@gmail.com",
+                    "token_file": "/etc/passwd",  # 絶対パス
+                    "enabled": True,
+                    "color": "#fbbc04",
+                    "display_name": "攻撃2"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock credentials
+        mock_creds = MagicMock()
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            client.load_accounts()
+
+        # 安全なアカウントのみロードされる
+        assert len(client.accounts) == 1
+        assert 'account_safe' in client.accounts
+        assert 'account_traversal' not in client.accounts
+        assert 'account_absolute' not in client.accounts
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_load_accounts_rejects_invalid_filename(self, mock_creds_class, mock_build, tmp_path):
+        """load_accounts()が不正なファイル名を拒否する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # 正常なトークンファイル
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_safe",
+                    "email": "safe@gmail.com",
+                    "token_file": "token_account_1.json",  # 正常（token_*.json形式）
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "安全"
+                },
+                {
+                    "id": "account_invalid",
+                    "email": "invalid@gmail.com",
+                    "token_file": "malicious.json",  # token_*.json形式ではない
+                    "enabled": True,
+                    "color": "#ea4335",
+                    "display_name": "不正"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock credentials
+        mock_creds = MagicMock()
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            client.load_accounts()
+
+        # 正しい形式のファイル名のアカウントのみロードされる
+        assert len(client.accounts) == 1
+        assert 'account_safe' in client.accounts
+        assert 'account_invalid' not in client.accounts
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_get_events_handles_pagination(self, mock_creds_class, mock_build, tmp_path):
+        """_get_events_from_service()がページネーションを処理する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        mock_creds = MagicMock()
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service - ページネーションを返す
+        mock_list_call = MagicMock()
+
+        # 1ページ目
+        page1 = {
+            'items': [
+                {
+                    'id': 'event1',
+                    'summary': 'イベント1',
+                    'start': {'dateTime': '2026-02-09T10:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-09T11:00:00+09:00'},
+                }
+            ],
+            'nextPageToken': 'token_page2'
+        }
+
+        # 2ページ目
+        page2 = {
+            'items': [
+                {
+                    'id': 'event2',
+                    'summary': 'イベント2',
+                    'start': {'dateTime': '2026-02-09T12:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-09T13:00:00+09:00'},
+                }
+            ],
+            'nextPageToken': 'token_page3'
+        }
+
+        # 3ページ目（最終）
+        page3 = {
+            'items': [
+                {
+                    'id': 'event3',
+                    'summary': 'イベント3',
+                    'start': {'dateTime': '2026-02-09T14:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-09T15:00:00+09:00'},
+                }
+            ]
+        }
+
+        mock_list_call.execute.side_effect = [page1, page2, page3]
+
+        mock_service = MagicMock()
+        mock_service.events().list.return_value = mock_list_call
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir), \
+             patch('src.calendar_client.CALENDAR_IDS', ['primary']):
+
+            client.load_accounts()
+            events = client.get_all_events()
+
+        # 全ページのイベントが取得されている
+        assert len(events) == 3
+        assert events[0].summary == 'イベント1'
+        assert events[1].summary == 'イベント2'
+        assert events[2].summary == 'イベント3'
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_get_all_events_uses_local_timezone(self, mock_creds_class, mock_build, tmp_path):
+        """get_all_events()がローカルタイムゾーンの日付境界を使用する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        mock_creds = MagicMock()
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_service.events().list().execute.return_value = {'items': []}
+
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir), \
+             patch('src.calendar_client.CALENDAR_IDS', ['primary']):
+
+            client.load_accounts()
+
+            # get_all_events()を呼び出し
+            from datetime import datetime, timezone, timedelta
+
+            # 今日の日付をローカルTZで計算
+            today = datetime.now().date()
+            local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+            expected_start = datetime.combine(today, datetime.min.time(), tzinfo=local_tz)
+            expected_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
+
+            client.get_all_events(days=1)
+
+        # list()が呼ばれた引数を確認
+        call_args = mock_service.events().list.call_args
+        assert call_args is not None
+
+        # timeMinとtimeMaxがローカルTZの日付境界になっていることを確認
+        time_min = call_args[1]['timeMin']
+        time_max = call_args[1]['timeMax']
+
+        # ISO形式の文字列をdatetimeに変換して比較
+        from datetime import datetime as dt
+        time_min_dt = dt.fromisoformat(time_min)
+        time_max_dt = dt.fromisoformat(time_max)
+
+        # ローカルTZの00:00であることを確認
+        assert time_min_dt.hour == 0
+        assert time_min_dt.minute == 0
+        assert time_min_dt.second == 0
+
+        assert time_max_dt.hour == 0
+        assert time_max_dt.minute == 0
+        assert time_max_dt.second == 0
+
+        # 日付が今日と明日であることを確認
+        assert time_min_dt.date() == today
+        assert time_max_dt.date() == today + timedelta(days=1)

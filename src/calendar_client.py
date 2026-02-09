@@ -3,6 +3,7 @@ Google Calendar API連携モジュール
 OAuth2認証とカレンダーイベントの取得を担当
 """
 import os
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 import logging
@@ -519,6 +520,40 @@ class CalendarClient:
             logger.error(f"アカウント削除エラー: {e}")
             return False
 
+    def _validate_token_file_path(self, token_file: str) -> bool:
+        """
+        トークンファイルパスを検証（セキュリティ対策）
+
+        Args:
+            token_file: トークンファイル名
+
+        Returns:
+            bool: パスが安全な場合True、そうでない場合False
+        """
+        # 1. ファイル名がtoken_*.json形式であることを確認（ホワイトリスト）
+        import re
+        if not re.match(r'^token_[a-zA-Z0-9_]+\.json$', token_file):
+            logger.warning(f"不正なトークンファイル名形式: {token_file}")
+            return False
+
+        # 2. パストラバーサル攻撃を検出
+        if '..' in token_file or token_file.startswith('/'):
+            logger.warning(f"パストラバーサル攻撃を検出: {token_file}")
+            return False
+
+        # 3. パスがCONFIG_DIR配下であることを確認
+        try:
+            token_path = (CONFIG_DIR / token_file).resolve()
+            config_dir_resolved = CONFIG_DIR.resolve()
+
+            # relative_to()で相対パスを計算できない場合、CONFIG_DIR配下でない
+            token_path.relative_to(config_dir_resolved)
+        except ValueError:
+            logger.warning(f"トークンファイルがCONFIG_DIR配下にありません: {token_file}")
+            return False
+
+        return True
+
     def load_accounts(self):
         """
         accounts.jsonから有効なアカウントを読み込み、サービスインスタンスを初期化
@@ -535,6 +570,11 @@ class CalendarClient:
 
             if not token_file:
                 logger.warning(f"アカウント {account_id} のトークンファイルが設定されていません")
+                continue
+
+            # トークンファイルパスの検証（セキュリティ対策）
+            if not self._validate_token_file_path(token_file):
+                logger.warning(f"アカウント {account_id} のトークンファイルパスが無効です: {token_file}")
                 continue
 
             token_path = CONFIG_DIR / token_file
@@ -554,6 +594,8 @@ class CalendarClient:
                         # 更新したトークンを保存
                         with open(token_path, 'w') as token:
                             token.write(creds.to_json())
+                        # トークンファイルの権限を600に設定
+                        os.chmod(token_path, 0o600)
                     else:
                         logger.warning(f"アカウント {account_id} のトークンが無効です")
                         continue
@@ -636,35 +678,44 @@ class CalendarClient:
         """
         all_events = []
 
-        # 日時範囲を設定
-        now = datetime.now(timezone.utc)
-        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end = day_start + timedelta(days=days)
+        # 日時範囲を設定（ローカルタイムゾーン基準）
+        today = datetime.now().date()
+        local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+        day_start = datetime.combine(today, datetime.min.time(), tzinfo=local_tz)
+        day_end = datetime.combine(today + timedelta(days=days), datetime.min.time(), tzinfo=local_tz)
 
         for calendar_id in CALENDAR_IDS:
             try:
-                events_result = service.events().list(
-                    calendarId=calendar_id,
-                    timeMin=day_start.isoformat(),
-                    timeMax=day_end.isoformat(),
-                    singleEvents=True,
-                    orderBy='startTime'
-                ).execute()
+                # ページネーション処理
+                page_token = None
+                while True:
+                    events_result = service.events().list(
+                        calendarId=calendar_id,
+                        timeMin=day_start.isoformat(),
+                        timeMax=day_end.isoformat(),
+                        singleEvents=True,
+                        orderBy='startTime',
+                        pageToken=page_token
+                    ).execute()
 
-                for item in events_result.get('items', []):
-                    # イベントをパース
-                    event = self._parse_event(item, calendar_id)
+                    for item in events_result.get('items', []):
+                        # イベントをパース
+                        event = self._parse_event(item, calendar_id)
 
-                    if event:
-                        # アカウント情報を付与（dataclassは不変なので新しいインスタンスを作成）
-                        from dataclasses import replace
-                        event = replace(
-                            event,
-                            account_id=account_id,
-                            account_color=account_color,
-                            account_display_name=account_display_name
-                        )
-                        all_events.append(event)
+                        if event:
+                            # アカウント情報を付与（dataclassは不変なので新しいインスタンスを作成）
+                            event = replace(
+                                event,
+                                account_id=account_id,
+                                account_color=account_color,
+                                account_display_name=account_display_name
+                            )
+                            all_events.append(event)
+
+                    # 次のページがあるか確認
+                    page_token = events_result.get('nextPageToken')
+                    if not page_token:
+                        break
 
             except HttpError as error:
                 logger.error(f"カレンダー {calendar_id} のAPIエラー: {error}")
