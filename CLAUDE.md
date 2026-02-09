@@ -77,3 +77,52 @@
 ## Key Directories / Commands
 - 例: `src/`, `backend/`, `frontend/` などの役割
 - 例: よく使うテスト・実行コマンド
+---
+
+## 🔄 Development Workflow（Harness + Codex連携）
+
+### 基本フロー
+
+```
+計画 → 実装 → レビュー → 出荷
+/plan-with-agent → /work → /harness-review + /codex-review → commit
+```
+
+1. **計画**: 機能追加・変更の前に `/plan-with-agent` で計画を作成する
+2. **実装**: 計画を確認後、`/work` で並列実装を開始する（TDD推奨）
+3. **レビュー**: 実装後、`/harness-review` で4視点レビュー（セキュリティ・パフォーマンス・品質・アクセシビリティ）を実施する
+4. **セカンドオピニオン**: Codexによるセカンドオピニオンが必要な場合、`/codex-review` を実行する
+5. **コミット**: 問題がなければコミットする
+
+### 小さな修正の場合
+
+計画不要な軽微な修正（typo、1行修正等）は直接実装してよい。
+ただしコミット前に `/codex-review` でのチェックを推奨する。
+
+## 📝 Codex Review Integration
+
+コードレビューにはCodex MCP（セカンドオピニオン）を活用する。
+
+- **通常のレビュー**: `mcp__codex-cli__review` を使用（MCP経由、コンテキスト消費約1/5）
+- **構造化出力が必要な場合のみ**: Bash経由の `codex exec` にフォールバック
+- **レビュー結果**: Claude 自身の分析と比較し、合意点・相違点を明示すること
+
+### レビュータイミング
+
+| タイミング | 方法 |
+|-----------|------|
+| コミット前 | `/codex-review` で未コミット変更をレビュー |
+| PR作成前 | `/harness-review` + `/codex-review` の2段階レビュー |
+| 重要な設計判断時 | Codex汎用プロンプトでセカンドオピニオン取得 |
+
+## 🔧 実行コマンド
+
+**テスト実行:**
+```bash
+source venv/bin/activate && python -m pytest tests/ -v --tb=short
+```
+
+**アプリケーション起動:**
+```bash
+python run_gui.py
+```

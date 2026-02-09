@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const i=JSON.parse(d);const p=i.tool_input?.file_path;if(p&&fs.existsSync(p)&&p.endsWith('.py')){const c=fs.readFileSync(p,'utf8');const lines=c.split('\\n');const matches=[];lines.forEach((l,idx)=>{if(/print\\(/.test(l)&&!/^\\s*#/.test(l))matches.push((idx+1)+': '+l.trim())});if(matches.length){console.error('[Hook] print()を検出: '+p);matches.slice(0,5).forEach(m=>console.error('  L'+m));console.error('[Hook] コミット前に削除またはloggerに変更してください')}}console.log(d)})\"",
+            "timeout": 10
+          }
+        ],
+        "description": "print()検出（Python）"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const{execSync}=require('child_process');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const diff=execSync('git diff --stat',{encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();if(diff){console.error('\\n[Session End] 未コミットの変更があります:');console.error(diff);console.error('\\n推奨: /codex-review で変更をレビューしてからコミットしてください')}}catch(e){}console.log(d)})\"",
+            "timeout": 15
+          }
+        ],
+        "description": "セッション終了時の未コミット変更チェック"
+      },
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "セッション終了前に以下を確認してください:\n1. 未コミットの変更がある場合、Codexレビュー（mcp__codex-cli__review uncommitted:true）を実行し結果を簡潔に報告\n2. Plans.mdやProgress.mdがあれば進捗を更新\n3. 完了状況を一言で報告\n\n{\"done\": true} で終了OK、{\"done\": false, \"reason\": \"理由\"} で継続必要を報告",
+            "timeout": 60
+          }
+        ],
+        "description": "セッション終了時のCodexレビュー+進捗確認"
+      }
+    ]
+  }
+}
