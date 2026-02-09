@@ -3,10 +3,17 @@
 アプリケーションの動作を制御する設定値を定義
 """
 import os
+import sys
 from pathlib import Path
 
 # プロジェクトルートディレクトリ
-BASE_DIR = Path(__file__).parent.parent
+# PyInstaller バンドル内の場合は _MEIPASS を使用
+if getattr(sys, 'frozen', False):
+    # PyInstaller バンドル内での実行
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    # 通常のPython実行
+    BASE_DIR = Path(__file__).parent.parent
 
 # === 画像設定 ===
 IMAGE_WIDTH = 1920
@@ -80,8 +87,18 @@ DEFAULT_EVENT_COLORS = {
 
 # === Google Calendar API設定 ===
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
-CREDENTIALS_PATH = BASE_DIR / 'credentials' / 'credentials.json'
-TOKEN_PATH = BASE_DIR / 'credentials' / 'token.json'
+
+# credentials は PyInstaller バンドルに含まれないため、
+# ユーザーのホームディレクトリから読み込む
+if getattr(sys, 'frozen', False):
+    # PyInstaller バンドル内での実行 - ユーザーのホームディレクトリを使用
+    CREDENTIALS_DIR = Path.home() / '.calendar_wallpaper' / 'credentials'
+    CREDENTIALS_PATH = CREDENTIALS_DIR / 'credentials.json'
+    TOKEN_PATH = CREDENTIALS_DIR / 'token.json'
+else:
+    # 開発環境 - プロジェクトディレクトリを使用
+    CREDENTIALS_PATH = BASE_DIR / 'credentials' / 'credentials.json'
+    TOKEN_PATH = BASE_DIR / 'credentials' / 'token.json'
 
 # カレンダーID（複数指定可能）
 # 'primary'は主カレンダー、その他のカレンダーIDも追加可能

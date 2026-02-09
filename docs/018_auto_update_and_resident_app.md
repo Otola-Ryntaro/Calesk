@@ -128,8 +128,8 @@ class TrayIcon(QSystemTrayIcon):
 - [x] トレイアイコン（システムデフォルトアイコン使用）
 
 ### Phase 5: 配布
-- [ ] PyInstaller / py2app での `.app` バンドル
-- [ ] ログイン時自動起動設定
+- [x] PyInstaller / py2app での `.app` バンドル
+- [x] ログイン時自動起動設定
 
 ## 変更ファイル
 
@@ -142,5 +142,28 @@ class TrayIcon(QSystemTrayIcon):
 - `src/ui/tray_icon.py` - システムトレイアイコン
 - `assets/tray_icon.png` - トレイアイコン画像
 
+## Phase 5 実装詳細
+
+### ビルド設定
+
+- **ツール**: PyInstaller 6.18.0
+- **理由**: Python 3.13対応、PyQt6サポート、Apple Silicon対応、クロスプラットフォーム
+- **設定ファイル**: `CalendarWallpaper.spec`
+- **ビルドスクリプト**: `scripts/build_app.sh`
+- **バンドルサイズ**: 約191MB
+
+### ログイン時自動起動
+
+- **方式**: macOS LaunchAgent
+- **plistファイル**: `com.example.calendarwallpaper.plist`
+- **配置先**: `~/Library/LaunchAgents/`
+- **インストールスクリプト**: `scripts/install_app.sh`
+- **アンインストールスクリプト**: `scripts/uninstall_app.sh`
+
+### ドキュメント
+
+詳細は [docs/BUILD.md](BUILD.md) を参照。
+
 ## 優先度: MEDIUM（Phase 1は HIGH）
 ## 工数: Phase 1: 小（2時間）、Phase 2-3: 中（3時間）、Phase 4-5: 大（6-8時間）
+## ステータス: ✅ 全Phase完了
