@@ -25,6 +25,7 @@ class CalendarClient:
     def __init__(self):
         self.service = None
         self.creds = None
+        self.accounts = {}  # {account_id: {'service': service, 'email': str, 'color': str, 'display_name': str}}
 
     @property
     def is_authenticated(self) -> bool:
@@ -517,3 +518,159 @@ class CalendarClient:
         except Exception as e:
             logger.error(f"アカウント削除エラー: {e}")
             return False
+
+    def load_accounts(self):
+        """
+        accounts.jsonから有効なアカウントを読み込み、サービスインスタンスを初期化
+        """
+        config = self._load_accounts_config()
+        self.accounts = {}
+
+        for account in config.get('accounts', []):
+            if not account.get('enabled', False):
+                continue
+
+            account_id = account['id']
+            token_file = account.get('token_file', '')
+
+            if not token_file:
+                logger.warning(f"アカウント {account_id} のトークンファイルが設定されていません")
+                continue
+
+            token_path = CONFIG_DIR / token_file
+
+            if not token_path.exists():
+                logger.warning(f"トークンファイルが見つかりません: {token_path}")
+                continue
+
+            try:
+                # トークンを読み込み
+                creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+
+                # トークンが無効な場合はスキップ
+                if not creds or not creds.valid:
+                    if creds and creds.expired and creds.refresh_token:
+                        creds.refresh(Request())
+                        # 更新したトークンを保存
+                        with open(token_path, 'w') as token:
+                            token.write(creds.to_json())
+                    else:
+                        logger.warning(f"アカウント {account_id} のトークンが無効です")
+                        continue
+
+                # サービスを構築
+                service = build('calendar', 'v3', credentials=creds)
+
+                # アカウント情報を保存
+                self.accounts[account_id] = {
+                    'service': service,
+                    'email': account.get('email', ''),
+                    'color': account.get('color', '#4285f4'),
+                    'display_name': account.get('display_name', account.get('email', ''))
+                }
+
+                logger.info(f"アカウントを読み込みました: {account['email']} (ID: {account_id})")
+
+            except Exception as e:
+                logger.error(f"アカウント {account_id} の読み込みエラー: {e}")
+                continue
+
+    def get_all_events(self, days: int = 1) -> List[CalendarEvent]:
+        """
+        すべての有効なアカウントからイベントを取得して統合
+
+        Args:
+            days: 取得する日数（デフォルト: 1 = 今日のみ）
+
+        Returns:
+            List[CalendarEvent]: 統合されたイベント情報のリスト（時系列ソート済み）
+        """
+        all_events = []
+
+        for account_id, account_data in self.accounts.items():
+            service = account_data['service']
+            color = account_data['color']
+            display_name = account_data['display_name']
+
+            try:
+                # このアカウントからイベントを取得
+                events = self._get_events_from_service(
+                    service,
+                    account_id,
+                    color,
+                    display_name,
+                    days
+                )
+                all_events.extend(events)
+
+            except Exception as e:
+                logger.error(f"アカウント {account_id} からのイベント取得エラー: {e}")
+                continue
+
+        # 時系列でソート
+        all_events.sort(key=lambda e: e.start_datetime)
+
+        logger.info(f"統合イベント取得: {len(all_events)}件（{len(self.accounts)}アカウント）")
+        return all_events
+
+    def _get_events_from_service(
+        self,
+        service,
+        account_id: str,
+        account_color: str,
+        account_display_name: str,
+        days: int = 1
+    ) -> List[CalendarEvent]:
+        """
+        1つのサービスインスタンスからイベントを取得
+
+        Args:
+            service: Google Calendar APIサービスインスタンス
+            account_id: アカウントID
+            account_color: アカウント色
+            account_display_name: アカウント表示名
+            days: 取得する日数
+
+        Returns:
+            List[CalendarEvent]: イベント情報のリスト
+        """
+        all_events = []
+
+        # 日時範囲を設定
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=days)
+
+        for calendar_id in CALENDAR_IDS:
+            try:
+                events_result = service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=day_start.isoformat(),
+                    timeMax=day_end.isoformat(),
+                    singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+
+                for item in events_result.get('items', []):
+                    # イベントをパース
+                    event = self._parse_event(item, calendar_id)
+
+                    if event:
+                        # アカウント情報を付与（dataclassは不変なので新しいインスタンスを作成）
+                        from dataclasses import replace
+                        event = replace(
+                            event,
+                            account_id=account_id,
+                            account_color=account_color,
+                            account_display_name=account_display_name
+                        )
+                        all_events.append(event)
+
+            except HttpError as error:
+                logger.error(f"カレンダー {calendar_id} のAPIエラー: {error}")
+                continue
+            except Exception as e:
+                logger.error(f"カレンダー {calendar_id} のイベント取得エラー: {e}")
+                continue
+
+        return all_events

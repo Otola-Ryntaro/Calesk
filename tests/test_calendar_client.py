@@ -1217,3 +1217,166 @@ class TestAccountsConfiguration:
 
         # account_2のトークンファイルは残っている
         assert (token_dir / "token_account_2.json").exists()
+
+
+class TestMultipleAccountsEvents:
+    """複数アカウントからのイベント統合取得に関するテスト"""
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_load_accounts_creates_services(self, mock_creds_class, mock_build, tmp_path):
+        """load_accounts()が有効なアカウントのサービスを初期化する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # トークンファイル作成
+        (token_dir / "token_account_1.json").write_text('{"token": "test1", "refresh_token": "refresh1"}')
+        (token_dir / "token_account_2.json").write_text('{"token": "test2", "refresh_token": "refresh2"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                },
+                {
+                    "id": "account_2",
+                    "email": "user2@gmail.com",
+                    "token_file": "token_account_2.json",
+                    "enabled": False,  # 無効
+                    "color": "#ea4335",
+                    "display_name": "アカウント2"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock credentials
+        mock_creds1 = MagicMock()
+        mock_creds1.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds1
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            client.load_accounts()
+
+        # 有効なアカウント（account_1）のみサービスが初期化される
+        assert hasattr(client, 'accounts')
+        assert len(client.accounts) == 1
+        assert 'account_1' in client.accounts
+        assert client.accounts['account_1']['email'] == 'user1@gmail.com'
+        assert client.accounts['account_1']['color'] == '#4285f4'
+
+    @patch('src.calendar_client.build')
+    @patch('src.calendar_client.Credentials')
+    def test_get_all_events_from_multiple_accounts(self, mock_creds_class, mock_build, tmp_path):
+        """get_all_events()が複数アカウントからイベントを統合して取得する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # トークンファイル作成
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+        (token_dir / "token_account_2.json").write_text('{"token": "test2"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "work@company.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "仕事用"
+                },
+                {
+                    "id": "account_2",
+                    "email": "private@gmail.com",
+                    "token_file": "token_account_2.json",
+                    "enabled": True,
+                    "color": "#ea4335",
+                    "display_name": "プライベート"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock credentials
+        mock_creds = MagicMock()
+        mock_creds.valid = True
+        mock_creds_class.from_authorized_user_file.return_value = mock_creds
+
+        # Mock service - 異なるイベントを返す
+        mock_service1 = MagicMock()
+        mock_service2 = MagicMock()
+
+        # account_1のイベント
+        mock_service1.events().list().execute.return_value = {
+            'items': [
+                {
+                    'id': 'event1',
+                    'summary': '仕事ミーティング',
+                    'start': {'dateTime': '2026-02-09T10:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-09T11:00:00+09:00'},
+                }
+            ]
+        }
+
+        # account_2のイベント
+        mock_service2.events().list().execute.return_value = {
+            'items': [
+                {
+                    'id': 'event2',
+                    'summary': 'ランチ',
+                    'start': {'dateTime': '2026-02-09T12:00:00+09:00'},
+                    'end': {'dateTime': '2026-02-09T13:00:00+09:00'},
+                }
+            ]
+        }
+
+        # buildが呼ばれるたびに異なるserviceを返す
+        mock_build.side_effect = [mock_service1, mock_service2]
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir), \
+             patch('src.calendar_client.CALENDAR_IDS', ['primary']):
+
+            client.load_accounts()
+            events = client.get_all_events()
+
+        # 2つのアカウントからイベントが統合されている
+        assert len(events) == 2
+
+        # イベントにアカウント情報が付与されている
+        work_event = [e for e in events if e.summary == '仕事ミーティング'][0]
+        assert work_event.account_id == 'account_1'
+        assert work_event.account_color == '#4285f4'
+        assert work_event.account_display_name == '仕事用'
+
+        private_event = [e for e in events if e.summary == 'ランチ'][0]
+        assert private_event.account_id == 'account_2'
+        assert private_event.account_color == '#ea4335'
+        assert private_event.account_display_name == 'プライベート'
+
+        # 時系列でソートされている
+        assert events[0].start_datetime < events[1].start_datetime
