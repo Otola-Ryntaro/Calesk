@@ -989,3 +989,231 @@ class TestAccountsConfiguration:
         enabled_accounts = [acc for acc in config['accounts'] if acc['enabled']]
         assert len(enabled_accounts) == 1
         assert enabled_accounts[0]['id'] == "account_1"
+
+    @patch('src.calendar_client.InstalledAppFlow')
+    @patch('src.calendar_client.build')
+    def test_add_account_creates_new_account(self, mock_build, mock_flow_class, tmp_path):
+        """add_account()で新しいアカウントを追加できる"""
+        # テスト用のaccounts.jsonを作成
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        accounts_data = {"accounts": []}
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        # Mock OAuth2フロー
+        mock_flow = MagicMock()
+        mock_flow_class.from_client_secrets_file.return_value = mock_flow
+
+        mock_creds = MagicMock()
+        mock_creds.to_json.return_value = '{"token": "test_token"}'
+        mock_creds.valid = True
+        mock_flow.run_local_server.return_value = mock_creds
+
+        # Mock service
+        mock_service = MagicMock()
+        mock_service.calendarList().list().execute.return_value = {
+            'items': [{'id': 'primary', 'summary': 'user@gmail.com'}]
+        }
+        mock_build.return_value = mock_service
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CREDENTIALS_PATH', tmp_path / 'credentials.json'), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            # credentials.jsonをモック
+            (tmp_path / 'credentials.json').write_text('{"installed": {}}')
+
+            result = client.add_account(display_name="仕事用")
+
+        # 結果を確認
+        assert result is not None
+        assert 'id' in result
+        assert result['email'] == 'user@gmail.com'
+        assert result['display_name'] == '仕事用'
+        assert result['enabled'] is True
+
+        # accounts.jsonが更新されたことを確認
+        with open(accounts_file, 'r') as f:
+            saved_config = json.load(f)
+
+        assert len(saved_config['accounts']) == 1
+        assert saved_config['accounts'][0]['email'] == 'user@gmail.com'
+        assert saved_config['accounts'][0]['display_name'] == '仕事用'
+
+    def test_add_account_generates_unique_id(self, tmp_path):
+        """add_account()が一意のaccount_idを生成する"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # 既存アカウント1件
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "既存アカウント"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            # _generate_account_id() をテスト
+            account_id = client._generate_account_id()
+
+        # 新しいIDが生成される
+        assert account_id == "account_2"
+
+    def test_add_account_assigns_default_color(self, tmp_path):
+        """add_account()がデフォルトの色を割り当てる"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {"accounts": []}
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            # デフォルト色のリストを確認
+            color = client._get_next_default_color()
+
+        # デフォルト色が返される（例: #4285f4, #ea4335, #fbbc04 など）
+        assert color.startswith('#')
+        assert len(color) == 7  # #RRGGBB形式
+
+    def test_remove_account_deletes_account(self, tmp_path):
+        """remove_account()でアカウントを削除できる"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # テスト用のトークンファイル作成
+        token_file = token_dir / "token_account_1.json"
+        token_file.write_text('{"token": "test"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "テスト用"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            result = client.remove_account("account_1")
+
+        # 削除成功
+        assert result is True
+
+        # accounts.jsonから削除されたことを確認
+        with open(accounts_file, 'r') as f:
+            saved_config = json.load(f)
+
+        assert len(saved_config['accounts']) == 0
+
+        # トークンファイルが削除されたことを確認
+        assert not token_file.exists()
+
+    def test_remove_account_nonexistent_id(self, tmp_path):
+        """remove_account()で存在しないaccount_idを指定した場合、Falseを返す"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {"accounts": []}
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            result = client.remove_account("nonexistent_id")
+
+        # 削除失敗
+        assert result is False
+
+    def test_remove_account_preserves_other_accounts(self, tmp_path):
+        """remove_account()で1つのアカウントを削除しても、他のアカウントは残る"""
+        accounts_file = tmp_path / "accounts.json"
+        token_dir = tmp_path / "tokens"
+        token_dir.mkdir()
+
+        # テスト用のトークンファイル作成
+        (token_dir / "token_account_1.json").write_text('{"token": "test1"}')
+        (token_dir / "token_account_2.json").write_text('{"token": "test2"}')
+
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                },
+                {
+                    "id": "account_2",
+                    "email": "user2@gmail.com",
+                    "token_file": "token_account_2.json",
+                    "enabled": True,
+                    "color": "#ea4335",
+                    "display_name": "アカウント2"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file), \
+             patch('src.calendar_client.CONFIG_DIR', token_dir):
+
+            result = client.remove_account("account_1")
+
+        assert result is True
+
+        # account_2が残っていることを確認
+        with open(accounts_file, 'r') as f:
+            saved_config = json.load(f)
+
+        assert len(saved_config['accounts']) == 1
+        assert saved_config['accounts'][0]['id'] == "account_2"
+
+        # account_2のトークンファイルは残っている
+        assert (token_dir / "token_account_2.json").exists()

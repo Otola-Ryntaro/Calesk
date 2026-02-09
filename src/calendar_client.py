@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS, ACCOUNTS_CONFIG_PATH
+from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS, ACCOUNTS_CONFIG_PATH, CONFIG_DIR
 from .models.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
@@ -348,3 +348,172 @@ class CalendarClient:
             logger.info(f"アカウント設定を保存しました: {ACCOUNTS_CONFIG_PATH}")
         except Exception as e:
             logger.error(f"アカウント設定の保存エラー: {e}")
+
+    def _generate_account_id(self) -> str:
+        """
+        一意のaccount_idを生成
+
+        Returns:
+            str: 一意のaccount_id（例: "account_1", "account_2"）
+        """
+        config = self._load_accounts_config()
+        existing_ids = [acc['id'] for acc in config.get('accounts', [])]
+
+        # account_1, account_2, ... の形式で採番
+        counter = 1
+        while f"account_{counter}" in existing_ids:
+            counter += 1
+
+        return f"account_{counter}"
+
+    def _get_next_default_color(self) -> str:
+        """
+        次のデフォルト色を取得
+
+        Returns:
+            str: デフォルト色（例: "#4285f4"）
+        """
+        # Google Material Design カラーパレット
+        default_colors = [
+            "#4285f4",  # Blue
+            "#ea4335",  # Red
+            "#fbbc04",  # Yellow
+            "#34a853",  # Green
+            "#ff6d01",  # Orange
+            "#46bdc6",  # Cyan
+            "#7baaf7",  # Light Blue
+            "#f07b72",  # Light Red
+        ]
+
+        config = self._load_accounts_config()
+        used_colors = [acc.get('color', '') for acc in config.get('accounts', [])]
+
+        # 未使用の色を返す
+        for color in default_colors:
+            if color not in used_colors:
+                return color
+
+        # 全て使用済みの場合は最初の色を返す
+        return default_colors[0]
+
+    def add_account(self, display_name: str = "") -> Optional[Dict]:
+        """
+        新しいGoogleアカウントを追加
+
+        Args:
+            display_name: アカウントの表示名（オプション）
+
+        Returns:
+            Dict: 追加されたアカウント情報、失敗時はNone
+        """
+        try:
+            # 1. OAuth2フローを実行
+            if not CREDENTIALS_PATH.exists():
+                logger.error(f"認証情報ファイルが見つかりません: {CREDENTIALS_PATH}")
+                return None
+
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(CREDENTIALS_PATH), SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+
+            # 2. サービスを構築してメールアドレスを取得
+            service = build('calendar', 'v3', credentials=creds)
+            calendar_list = service.calendarList().list().execute()
+
+            # プライマリカレンダーからメールアドレスを取得
+            email = None
+            for cal in calendar_list.get('items', []):
+                if cal.get('id') == 'primary':
+                    email = cal.get('summary', 'unknown@gmail.com')
+                    break
+
+            if not email:
+                email = 'unknown@gmail.com'
+
+            # 3. 一意のaccount_idを生成
+            account_id = self._generate_account_id()
+
+            # 4. トークンファイル名を決定
+            token_filename = f"token_{account_id}.json"
+            token_path = CONFIG_DIR / token_filename
+
+            # ディレクトリ作成
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+            # トークンを保存
+            with open(token_path, 'w') as token_file:
+                token_file.write(creds.to_json())
+
+            # セキュリティ: パーミッション制限
+            os.chmod(token_path, 0o600)
+
+            # 5. デフォルト色を割り当て
+            color = self._get_next_default_color()
+
+            # 6. アカウント情報を作成
+            account_info = {
+                'id': account_id,
+                'email': email,
+                'token_file': token_filename,
+                'enabled': True,
+                'color': color,
+                'display_name': display_name or email
+            }
+
+            # 7. accounts.jsonに追加
+            config = self._load_accounts_config()
+            config['accounts'].append(account_info)
+            self._save_accounts_config(config)
+
+            logger.info(f"新しいアカウントを追加しました: {email} (ID: {account_id})")
+            return account_info
+
+        except Exception as e:
+            logger.error(f"アカウント追加エラー: {e}")
+            return None
+
+    def remove_account(self, account_id: str) -> bool:
+        """
+        アカウントを削除
+
+        Args:
+            account_id: 削除するアカウントのID
+
+        Returns:
+            bool: 削除成功でTrue、失敗でFalse
+        """
+        try:
+            # 1. accounts.jsonからアカウント情報を取得
+            config = self._load_accounts_config()
+            accounts = config.get('accounts', [])
+
+            # 削除対象のアカウントを検索
+            target_account = None
+            for account in accounts:
+                if account['id'] == account_id:
+                    target_account = account
+                    break
+
+            if not target_account:
+                logger.warning(f"アカウントが見つかりません: {account_id}")
+                return False
+
+            # 2. トークンファイルを削除
+            token_filename = target_account.get('token_file', '')
+            if token_filename:
+                token_path = CONFIG_DIR / token_filename
+                if token_path.exists():
+                    token_path.unlink()
+                    logger.info(f"トークンファイルを削除しました: {token_filename}")
+
+            # 3. accounts.jsonから削除
+            config['accounts'] = [acc for acc in accounts if acc['id'] != account_id]
+            self._save_accounts_config(config)
+
+            logger.info(f"アカウントを削除しました: {account_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"アカウント削除エラー: {e}")
+            return False
