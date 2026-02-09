@@ -23,6 +23,9 @@ class CalendarEvent:
         location: 場所（オプション）
         description: 説明（オプション）
         color_id: カラーID（オプション、デフォルト: "1"）
+        account_id: アカウントID（オプション、デフォルト: "default"）
+        account_color: アカウント色（オプション、デフォルト: "#4285f4"）
+        account_display_name: アカウント表示名（オプション、デフォルト: ""）
     """
     id: str
     summary: str
@@ -33,6 +36,9 @@ class CalendarEvent:
     location: str = ""
     description: str = ""
     color_id: str = "1"
+    account_id: str = "default"
+    account_color: str = "#4285f4"
+    account_display_name: str = ""
 
     def to_dict(self) -> Dict:
         """
@@ -63,7 +69,10 @@ class CalendarEvent:
             calendar_id=data['calendar_id'],
             location=data.get('location', ''),
             description=data.get('description', ''),
-            color_id=data.get('color_id', '1')
+            color_id=data.get('color_id', '1'),
+            account_id=data.get('account_id', 'default'),
+            account_color=data.get('account_color', '#4285f4'),
+            account_display_name=data.get('account_display_name', '')
         )
 
     def start_time_str(self) -> str:

@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS
+from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS, ACCOUNTS_CONFIG_PATH
 from .models.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
@@ -308,3 +308,43 @@ class CalendarClient:
             List[CalendarEvent]: 今週のイベント情報のリスト
         """
         return self.get_events(days=7)
+
+    def _load_accounts_config(self) -> Dict:
+        """
+        accounts.json からアカウント設定を読み込む
+
+        Returns:
+            Dict: アカウント設定（{"accounts": [...]}}）
+        """
+        import json
+
+        # ファイルが存在しない場合はデフォルト設定を返す
+        if not ACCOUNTS_CONFIG_PATH.exists():
+            return {"accounts": []}
+
+        try:
+            with open(ACCOUNTS_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            return config
+        except Exception as e:
+            logger.error(f"アカウント設定の読み込みエラー: {e}")
+            return {"accounts": []}
+
+    def _save_accounts_config(self, config: Dict):
+        """
+        accounts.json にアカウント設定を保存
+
+        Args:
+            config: アカウント設定（{"accounts": [...]}}）
+        """
+        import json
+
+        # ディレクトリが存在しない場合は作成
+        ACCOUNTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with open(ACCOUNTS_CONFIG_PATH, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            logger.info(f"アカウント設定を保存しました: {ACCOUNTS_CONFIG_PATH}")
+        except Exception as e:
+            logger.error(f"アカウント設定の保存エラー: {e}")

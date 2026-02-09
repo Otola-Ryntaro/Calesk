@@ -219,3 +219,94 @@ class TestCalendarEvent:
 
         events_dict = {event: "value"}
         assert events_dict[event] == "value"
+
+    def test_account_fields_with_defaults(self):
+        """アカウント情報フィールドがデフォルト値で作成できる"""
+        event = CalendarEvent(
+            id="event123",
+            summary="ミーティング",
+            start_datetime=datetime(2026, 2, 5, 14, 0),
+            end_datetime=datetime(2026, 2, 5, 15, 0),
+            is_all_day=False,
+            calendar_id="primary"
+        )
+
+        # デフォルト値
+        assert event.account_id == "default"
+        assert event.account_color == "#4285f4"
+        assert event.account_display_name == ""
+
+    def test_account_fields_with_values(self):
+        """アカウント情報フィールドを指定して作成できる"""
+        event = CalendarEvent(
+            id="event123",
+            summary="仕事のミーティング",
+            start_datetime=datetime(2026, 2, 5, 14, 0),
+            end_datetime=datetime(2026, 2, 5, 15, 0),
+            is_all_day=False,
+            calendar_id="work",
+            account_id="account_work",
+            account_color="#ea4335",
+            account_display_name="仕事用アカウント"
+        )
+
+        assert event.account_id == "account_work"
+        assert event.account_color == "#ea4335"
+        assert event.account_display_name == "仕事用アカウント"
+
+    def test_to_dict_with_account_fields(self):
+        """to_dict()でアカウント情報フィールドが含まれる"""
+        event = CalendarEvent(
+            id="event123",
+            summary="ミーティング",
+            start_datetime=datetime(2026, 2, 5, 14, 0),
+            end_datetime=datetime(2026, 2, 5, 15, 0),
+            is_all_day=False,
+            calendar_id="primary",
+            account_id="account_1",
+            account_color="#00ff00",
+            account_display_name="プライベート"
+        )
+
+        result = event.to_dict()
+
+        assert result['account_id'] == "account_1"
+        assert result['account_color'] == "#00ff00"
+        assert result['account_display_name'] == "プライベート"
+
+    def test_from_dict_with_account_fields(self):
+        """from_dict()でアカウント情報フィールドを読み込める"""
+        data = {
+            'id': 'event999',
+            'summary': 'ランチ',
+            'start_datetime': datetime(2026, 2, 5, 12, 0),
+            'end_datetime': datetime(2026, 2, 5, 13, 0),
+            'is_all_day': False,
+            'calendar_id': 'personal',
+            'account_id': 'account_private',
+            'account_color': '#ff0000',
+            'account_display_name': 'プライベート用'
+        }
+
+        event = CalendarEvent.from_dict(data)
+
+        assert event.account_id == 'account_private'
+        assert event.account_color == '#ff0000'
+        assert event.account_display_name == 'プライベート用'
+
+    def test_from_dict_with_account_defaults(self):
+        """from_dict()でアカウント情報フィールドのデフォルト値を使用できる"""
+        data = {
+            'id': 'event111',
+            'summary': 'タスク',
+            'start_datetime': datetime(2026, 2, 5, 9, 0),
+            'end_datetime': datetime(2026, 2, 5, 10, 0),
+            'is_all_day': False,
+            'calendar_id': 'work'
+        }
+
+        event = CalendarEvent.from_dict(data)
+
+        assert event.account_id == "default"
+        assert event.account_color == "#4285f4"
+        assert event.account_display_name == ""

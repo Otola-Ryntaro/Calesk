@@ -859,3 +859,133 @@ class TestLogout:
 
         assert client.creds is None
         assert client.service is None
+
+
+class TestAccountsConfiguration:
+    """複数アカウント設定の管理に関するテスト"""
+
+    def test_load_accounts_config_returns_dict(self):
+        """_load_accounts_config()がdict形式のアカウント設定を返す"""
+        client = CalendarClient()
+
+        # accounts.json が存在しない場合
+        with patch('pathlib.Path.exists', return_value=False):
+            config = client._load_accounts_config()
+
+        assert isinstance(config, dict)
+        assert 'accounts' in config
+
+    def test_load_accounts_config_default_structure(self):
+        """accounts.json が存在しない場合、デフォルトのアカウント設定を返す"""
+        client = CalendarClient()
+
+        with patch('pathlib.Path.exists', return_value=False):
+            config = client._load_accounts_config()
+
+        assert config['accounts'] == []
+
+    def test_load_accounts_config_reads_json_file(self, tmp_path):
+        """accounts.json ファイルが存在する場合、その内容を読み込む"""
+        # テスト用のaccounts.jsonを作成
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "仕事用"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            config = client._load_accounts_config()
+
+        assert len(config['accounts']) == 1
+        assert config['accounts'][0]['id'] == "account_1"
+        assert config['accounts'][0]['email'] == "user1@gmail.com"
+        assert config['accounts'][0]['enabled'] is True
+
+    def test_save_accounts_config_writes_json_file(self, tmp_path):
+        """_save_accounts_config()がaccounts.jsonにアカウント設定を保存する"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "仕事用"
+                }
+            ]
+        }
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            client._save_accounts_config(accounts_data)
+
+        # ファイルが作成されたことを確認
+        assert accounts_file.exists()
+
+        # 内容を確認
+        import json
+        with open(accounts_file, 'r') as f:
+            saved_data = json.load(f)
+
+        assert len(saved_data['accounts']) == 1
+        assert saved_data['accounts'][0]['id'] == "account_1"
+
+    def test_load_enabled_accounts_only(self, tmp_path):
+        """有効なアカウントのみをロードする"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user1@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "仕事用"
+                },
+                {
+                    "id": "account_2",
+                    "email": "user2@gmail.com",
+                    "token_file": "token_account_2.json",
+                    "enabled": False,  # 無効
+                    "color": "#ea4335",
+                    "display_name": "プライベート"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            # load_accounts() は有効なアカウントのみロードする
+            # （実装後にこのテストを完成させる）
+            config = client._load_accounts_config()
+
+        # 設定ファイル自体には2つのアカウントが含まれる
+        assert len(config['accounts']) == 2
+
+        # 有効なアカウントは1つのみ
+        enabled_accounts = [acc for acc in config['accounts'] if acc['enabled']]
+        assert len(enabled_accounts) == 1
+        assert enabled_accounts[0]['id'] == "account_1"

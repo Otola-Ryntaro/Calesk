@@ -95,10 +95,15 @@ if getattr(sys, 'frozen', False):
     CREDENTIALS_DIR = Path.home() / '.calendar_wallpaper' / 'credentials'
     CREDENTIALS_PATH = CREDENTIALS_DIR / 'credentials.json'
     TOKEN_PATH = CREDENTIALS_DIR / 'token.json'
+    CONFIG_DIR = Path.home() / '.calendar_wallpaper' / 'config'
 else:
     # 開発環境 - プロジェクトディレクトリを使用
     CREDENTIALS_PATH = BASE_DIR / 'credentials' / 'credentials.json'
     TOKEN_PATH = BASE_DIR / 'credentials' / 'token.json'
+    CONFIG_DIR = BASE_DIR / 'config'
+
+# 複数アカウント設定ファイルパス
+ACCOUNTS_CONFIG_PATH = CONFIG_DIR / 'accounts.json'
 
 # カレンダーID（複数指定可能）
 # 'primary'は主カレンダー、その他のカレンダーIDも追加可能
