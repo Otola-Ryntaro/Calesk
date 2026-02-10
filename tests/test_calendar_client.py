@@ -1218,6 +1218,55 @@ class TestAccountsConfiguration:
         # account_2のトークンファイルは残っている
         assert (token_dir / "token_account_2.json").exists()
 
+    def test_update_account_color(self, tmp_path):
+        """update_account_color()がアカウントの色を変更する"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [
+                {
+                    "id": "account_1",
+                    "email": "user@gmail.com",
+                    "token_file": "token_account_1.json",
+                    "enabled": True,
+                    "color": "#4285f4",
+                    "display_name": "アカウント1"
+                }
+            ]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            result = client.update_account_color("account_1", "#ff0000")
+
+        assert result is True
+
+        # 色が変更されていることを確認
+        with open(accounts_file, 'r') as f:
+            saved_config = json.load(f)
+
+        assert saved_config['accounts'][0]['color'] == "#ff0000"
+
+    def test_update_account_color_nonexistent_id(self, tmp_path):
+        """update_account_color()が存在しないアカウントIDを拒否する"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {"accounts": []}
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            result = client.update_account_color("nonexistent", "#ff0000")
+
+        assert result is False
+
 
 class TestMultipleAccountsEvents:
     """複数アカウントからのイベント統合取得に関するテスト"""

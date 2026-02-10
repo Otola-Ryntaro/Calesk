@@ -520,6 +520,44 @@ class CalendarClient:
             logger.error(f"アカウント削除エラー: {e}")
             return False
 
+    def update_account_color(self, account_id: str, color: str) -> bool:
+        """
+        アカウントの色を変更
+
+        Args:
+            account_id: アカウントID
+            color: 新しい色（16進数カラーコード、例: "#ff0000"）
+
+        Returns:
+            bool: 変更成功時True、失敗時False
+        """
+        try:
+            config = self._load_accounts_config()
+            accounts = config.get('accounts', [])
+
+            # 対象アカウントを検索
+            target_account = None
+            for account in accounts:
+                if account['id'] == account_id:
+                    target_account = account
+                    break
+
+            if not target_account:
+                logger.warning(f"アカウントが見つかりません: {account_id}")
+                return False
+
+            # 色を変更
+            target_account['color'] = color
+
+            # 保存
+            self._save_accounts_config(config)
+            logger.info(f"アカウント {account_id} の色を変更しました: {color}")
+            return True
+
+        except Exception as e:
+            logger.error(f"アカウント色変更エラー: {e}")
+            return False
+
     def _validate_token_file_path(self, token_file: str) -> bool:
         """
         トークンファイルパスを検証（セキュリティ対策）
