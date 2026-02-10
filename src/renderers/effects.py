@@ -228,6 +228,39 @@ class EffectsRendererMixin:
         b = int(color1[2] * (1 - ratio) + color2[2] * ratio)
         return (r, g, b)
 
+    @staticmethod
+    def _parse_hex_color(hex_color: str) -> Tuple[int, int, int]:
+        """16進数カラーコード（#RRGGBB）をRGBタプルに変換
+
+        Args:
+            hex_color: 16進数カラーコード（例: "#ff0000", "#4285f4"）
+
+        Returns:
+            Tuple[int, int, int]: RGB色 (R, G, B)
+                                  無効な形式の場合はデフォルト色 #4285f4 を返す
+        """
+        # デフォルト色（Google Blue）
+        default_color = (66, 133, 244)
+
+        # 基本的なバリデーション
+        if not hex_color or not isinstance(hex_color, str):
+            return default_color
+
+        # #RRGGBB形式をチェック
+        if not hex_color.startswith('#') or len(hex_color) != 7:
+            return default_color
+
+        try:
+            # #を除いて16進数としてパース
+            hex_value = hex_color[1:]
+            r = int(hex_value[0:2], 16)
+            g = int(hex_value[2:4], 16)
+            b = int(hex_value[4:6], 16)
+            return (r, g, b)
+        except ValueError:
+            # パースエラーの場合はデフォルト色を返す
+            return default_color
+
     def _draw_event_progress_bar(
         self,
         draw: ImageDraw.ImageDraw,

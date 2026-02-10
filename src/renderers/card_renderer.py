@@ -512,9 +512,8 @@ class CardRendererMixin:
 
         current_y += FONT_SIZE_CARD_DATE + 10
 
-        # カラーバー
-        color_id = event.color_id
-        bar_color = self._get_event_color(color_id)
+        # カラーバー（Phase 4: アカウント色を使用）
+        bar_color = self._parse_hex_color(event.account_color)
 
         # 終了済みの場合、カラーバーも薄くする
         if is_finished:
