@@ -6,7 +6,8 @@ import logging
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
-    QCheckBox, QSpinBox, QLabel, QPushButton, QGroupBox, QFormLayout
+    QCheckBox, QSpinBox, QLabel, QPushButton, QGroupBox, QFormLayout,
+    QListWidget, QListWidgetItem, QInputDialog, QColorDialog
 )
 from PyQt6.QtCore import Qt
 
@@ -142,10 +143,41 @@ class SettingsDialog(QDialog):
 
         auth_group.setLayout(auth_layout)
         layout.addWidget(auth_group)
+
+        # アカウント管理グループ（Phase 3）
+        accounts_group = QGroupBox("アカウント管理")
+        accounts_layout = QVBoxLayout()
+
+        # アカウント一覧
+        self.account_list_widget = QListWidget()
+        accounts_layout.addWidget(self.account_list_widget)
+
+        # ボタン行
+        accounts_btn_layout = QHBoxLayout()
+
+        self.add_account_button = QPushButton("アカウント追加")
+        self.add_account_button.clicked.connect(self._on_add_account)
+        accounts_btn_layout.addWidget(self.add_account_button)
+
+        self.remove_account_button = QPushButton("削除")
+        self.remove_account_button.clicked.connect(self._on_remove_account)
+        accounts_btn_layout.addWidget(self.remove_account_button)
+
+        self.change_color_button = QPushButton("色変更")
+        self.change_color_button.clicked.connect(self._on_change_color)
+        accounts_btn_layout.addWidget(self.change_color_button)
+
+        accounts_btn_layout.addStretch()
+        accounts_layout.addLayout(accounts_btn_layout)
+
+        accounts_group.setLayout(accounts_layout)
+        layout.addWidget(accounts_group)
+
         layout.addStretch()
 
         # 初期状態を反映
         self._update_auth_status()
+        self.refresh_account_list()
 
         return tab
 
@@ -180,6 +212,70 @@ class SettingsDialog(QDialog):
             self._calendar_client.logout()
             self._update_auth_status()
             logger.info("Googleログアウトを実行しました")
+
+    def _on_add_account(self):
+        """アカウント追加ボタンクリック"""
+        if not self._calendar_client:
+            return
+
+        display_name, ok = QInputDialog.getText(
+            self, "アカウント追加", "アカウント名:"
+        )
+        if ok and display_name:
+            # OAuth2フロー起動
+            account = self._calendar_client.add_account(display_name)
+            if account:
+                logger.info(f"アカウントを追加しました: {account.get('email', display_name)}")
+            self.refresh_account_list()
+
+    def _on_remove_account(self):
+        """削除ボタンクリック"""
+        if not self._calendar_client:
+            return
+
+        selected = self.account_list_widget.currentItem()
+        if selected:
+            account_id = selected.data(Qt.ItemDataRole.UserRole)
+            self._calendar_client.remove_account(account_id)
+            logger.info(f"アカウントを削除しました: {account_id}")
+            self.refresh_account_list()
+
+    def _on_change_color(self):
+        """色変更ボタンクリック"""
+        if not self._calendar_client:
+            return
+
+        selected = self.account_list_widget.currentItem()
+        if selected:
+            account_id = selected.data(Qt.ItemDataRole.UserRole)
+            color = QColorDialog.getColor()
+            if color.isValid():
+                success = self._calendar_client.update_account_color(
+                    account_id, color.name()
+                )
+                if success:
+                    logger.info(f"アカウント色を変更しました: {account_id} -> {color.name()}")
+                self.refresh_account_list()
+
+    def refresh_account_list(self):
+        """アカウント一覧を更新"""
+        if not self._calendar_client:
+            return
+
+        self.account_list_widget.clear()
+
+        # CalendarClient.accountsからアカウント情報を取得
+        for account_id, account_data in self._calendar_client.accounts.items():
+            email = account_data.get('email', account_id)
+            display_name = account_data.get('display_name', email)
+            color = account_data.get('color', '#4285f4')
+
+            # リストアイテム作成
+            item_text = f"{display_name} ({email})"
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.ItemDataRole.UserRole, account_id)
+
+            self.account_list_widget.addItem(item)
 
     def _on_auto_update_toggled(self, state):
         """自動更新チェックボックスの状態変更"""

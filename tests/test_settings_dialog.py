@@ -141,6 +141,7 @@ def mock_calendar_client():
     """テスト用CalendarClientモック"""
     client = MagicMock(spec=CalendarClient)
     client.is_authenticated = False
+    client.accounts = {}  # Phase 3: accounts属性を追加
     return client
 
 
@@ -263,3 +264,136 @@ class TestGoogleAccountTab:
         tab_widget = dialog.findChild(QTabWidget)
         tab_names = [tab_widget.tabText(i) for i in range(tab_widget.count())]
         assert "Googleアカウント" not in tab_names
+
+
+# === アカウント管理ウィジェットのテスト ===
+
+class TestAccountsManagementWidget:
+    """アカウント管理ウィジェットのテスト（Phase 3）"""
+
+    def test_account_list_widget_exists(self, dialog_with_auth):
+        """アカウント一覧ウィジェットが存在すること"""
+        from PyQt6.QtWidgets import QListWidget
+        assert hasattr(dialog_with_auth, 'account_list_widget')
+        assert isinstance(dialog_with_auth.account_list_widget, QListWidget)
+
+    def test_add_account_button_exists(self, dialog_with_auth):
+        """アカウント追加ボタンが存在すること"""
+        assert hasattr(dialog_with_auth, 'add_account_button')
+        assert isinstance(dialog_with_auth.add_account_button, QPushButton)
+
+    def test_remove_account_button_exists(self, dialog_with_auth):
+        """削除ボタンが存在すること"""
+        assert hasattr(dialog_with_auth, 'remove_account_button')
+        assert isinstance(dialog_with_auth.remove_account_button, QPushButton)
+
+    def test_change_color_button_exists(self, dialog_with_auth):
+        """色変更ボタンが存在すること"""
+        assert hasattr(dialog_with_auth, 'change_color_button')
+        assert isinstance(dialog_with_auth.change_color_button, QPushButton)
+
+    def test_add_account_button_click(self, qtbot, dialog_with_auth, mock_calendar_client):
+        """アカウント追加ボタンクリックでadd_account()が呼ばれること"""
+        # add_account()のモック設定
+        mock_calendar_client.add_account.return_value = {
+            'id': 'account_1',
+            'email': 'test@example.com',
+            'color': '#4285f4',
+            'display_name': 'テストアカウント'
+        }
+
+        # QInputDialogのモック（ユーザー入力をシミュレート）
+        with patch('PyQt6.QtWidgets.QInputDialog.getText', return_value=('テストアカウント', True)):
+            qtbot.mouseClick(dialog_with_auth.add_account_button, Qt.MouseButton.LeftButton)
+
+        # add_account()が呼ばれたことを確認
+        mock_calendar_client.add_account.assert_called_once_with('テストアカウント')
+
+    def test_remove_account_button_click(self, qtbot, dialog_with_auth, mock_calendar_client):
+        """削除ボタンクリックでremove_account()が呼ばれること"""
+        # アカウント一覧にアイテムを追加
+        from PyQt6.QtWidgets import QListWidgetItem
+        from PyQt6.QtCore import Qt as QtCore_Qt
+
+        item = QListWidgetItem("test@example.com")
+        item.setData(QtCore_Qt.ItemDataRole.UserRole, "account_1")
+        dialog_with_auth.account_list_widget.addItem(item)
+        dialog_with_auth.account_list_widget.setCurrentItem(item)
+
+        # 削除ボタンクリック
+        qtbot.mouseClick(dialog_with_auth.remove_account_button, Qt.MouseButton.LeftButton)
+
+        # remove_account()が呼ばれたことを確認
+        mock_calendar_client.remove_account.assert_called_once_with("account_1")
+
+    def test_change_color_button_click(self, qtbot, dialog_with_auth, mock_calendar_client):
+        """色変更ボタンクリックでupdate_account_color()が呼ばれること"""
+        # アカウント一覧にアイテムを追加
+        from PyQt6.QtWidgets import QListWidgetItem
+        from PyQt6.QtCore import Qt as QtCore_Qt
+        from PyQt6.QtGui import QColor
+
+        item = QListWidgetItem("test@example.com")
+        item.setData(QtCore_Qt.ItemDataRole.UserRole, "account_1")
+        dialog_with_auth.account_list_widget.addItem(item)
+        dialog_with_auth.account_list_widget.setCurrentItem(item)
+
+        # update_account_color()のモック設定
+        mock_calendar_client.update_account_color.return_value = True
+
+        # QColorDialogのモック（色選択をシミュレート）
+        mock_color = QColor(255, 0, 0)  # 赤
+        with patch('PyQt6.QtWidgets.QColorDialog.getColor', return_value=mock_color):
+            qtbot.mouseClick(dialog_with_auth.change_color_button, Qt.MouseButton.LeftButton)
+
+        # update_account_color()が呼ばれたことを確認
+        mock_calendar_client.update_account_color.assert_called_once()
+        call_args = mock_calendar_client.update_account_color.call_args[0]
+        assert call_args[0] == "account_1"
+        assert call_args[1] == "#ff0000"  # 赤の16進数
+
+    def test_refresh_account_list_loads_accounts(self, dialog_with_auth, mock_calendar_client):
+        """refresh_account_list()でアカウント一覧が読み込まれること"""
+        # load_accounts()のモック設定
+        mock_calendar_client.accounts = {
+            'account_1': {
+                'service': MagicMock(),
+                'email': 'user1@example.com',
+                'color': '#4285f4',
+                'display_name': 'アカウント1'
+            },
+            'account_2': {
+                'service': MagicMock(),
+                'email': 'user2@example.com',
+                'color': '#ea4335',
+                'display_name': 'アカウント2'
+            }
+        }
+
+        # refresh_account_list()を呼び出し
+        dialog_with_auth.refresh_account_list()
+
+        # アカウント一覧に2つのアイテムが追加されていることを確認
+        assert dialog_with_auth.account_list_widget.count() == 2
+
+    def test_remove_account_with_no_selection(self, qtbot, dialog_with_auth, mock_calendar_client):
+        """アイテム未選択時に削除ボタンをクリックしても何も起こらないこと"""
+        # アイテムを選択しない状態
+        dialog_with_auth.account_list_widget.clear()
+
+        # 削除ボタンクリック
+        qtbot.mouseClick(dialog_with_auth.remove_account_button, Qt.MouseButton.LeftButton)
+
+        # remove_account()が呼ばれていないことを確認
+        mock_calendar_client.remove_account.assert_not_called()
+
+    def test_change_color_with_no_selection(self, qtbot, dialog_with_auth, mock_calendar_client):
+        """アイテム未選択時に色変更ボタンをクリックしても何も起こらないこと"""
+        # アイテムを選択しない状態
+        dialog_with_auth.account_list_widget.clear()
+
+        # 色変更ボタンクリック
+        qtbot.mouseClick(dialog_with_auth.change_color_button, Qt.MouseButton.LeftButton)
+
+        # update_account_color()が呼ばれていないことを確認
+        mock_calendar_client.update_account_color.assert_not_called()
