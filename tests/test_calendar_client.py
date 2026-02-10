@@ -1267,6 +1267,113 @@ class TestAccountsConfiguration:
 
         assert result is False
 
+    def test_update_account_color_invalid_format(self, tmp_path):
+        """update_account_color()が無効な色形式を拒否する"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [{
+                "id": "account_1",
+                "email": "user@gmail.com",
+                "token_file": "token_account_1.json",
+                "enabled": True,
+                "color": "#4285f4",
+                "display_name": "アカウント1"
+            }]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            # 無効な形式（名前指定）
+            result1 = client.update_account_color("account_1", "red")
+            assert result1 is False
+
+            # 無効な形式（短縮形）
+            result2 = client.update_account_color("account_1", "#fff")
+            assert result2 is False
+
+            # 無効な形式（空文字）
+            result3 = client.update_account_color("account_1", "")
+            assert result3 is False
+
+            # 無効な形式（#なし）
+            result4 = client.update_account_color("account_1", "4285f4")
+            assert result4 is False
+
+            # 元の色が変わっていないことを確認
+            with open(accounts_file, 'r') as f:
+                config = json.load(f)
+            assert config['accounts'][0]['color'] == "#4285f4"
+
+    def test_update_account_color_valid_format(self, tmp_path):
+        """update_account_color()が有効な#RRGGBB形式を受け入れる"""
+        accounts_file = tmp_path / "accounts.json"
+        accounts_data = {
+            "accounts": [{
+                "id": "account_1",
+                "email": "user@gmail.com",
+                "token_file": "token_account_1.json",
+                "enabled": True,
+                "color": "#4285f4",
+                "display_name": "アカウント1"
+            }]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            # 小文字
+            result1 = client.update_account_color("account_1", "#ff0000")
+            assert result1 is True
+
+            # 大文字
+            result2 = client.update_account_color("account_1", "#00FF00")
+            assert result2 is True
+
+            # 混在
+            result3 = client.update_account_color("account_1", "#aB12Cd")
+            assert result3 is True
+
+            # 最終的な色を確認
+            with open(accounts_file, 'r') as f:
+                config = json.load(f)
+            assert config['accounts'][0]['color'] == "#aB12Cd"
+
+    def test_update_account_color_missing_id_key(self, tmp_path):
+        """update_account_color()がidキーのないアカウントレコードを安全に処理する"""
+        accounts_file = tmp_path / "accounts.json"
+        # idキーが欠けたアカウントレコード（破損データ）
+        accounts_data = {
+            "accounts": [{
+                "email": "user@gmail.com",
+                "token_file": "token_account_1.json",
+                "enabled": True,
+                "color": "#4285f4",
+                "display_name": "アカウント1"
+                # "id"キーが存在しない
+            }]
+        }
+
+        import json
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts_data, f)
+
+        client = CalendarClient()
+
+        with patch('src.calendar_client.ACCOUNTS_CONFIG_PATH', accounts_file):
+            # KeyErrorを発生させずにFalseを返すべき
+            result = client.update_account_color("account_1", "#ff0000")
+
+        assert result is False
+
 
 class TestMultipleAccountsEvents:
     """複数アカウントからのイベント統合取得に関するテスト"""

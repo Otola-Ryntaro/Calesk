@@ -531,14 +531,22 @@ class CalendarClient:
         Returns:
             bool: 変更成功時True、失敗時False
         """
+        import re
+
         try:
+            # 色形式のバリデーション（#RRGGBB形式）
+            if not re.match(r'^#[0-9a-fA-F]{6}$', color):
+                logger.warning(f"無効な色形式です: {color}（#RRGGBB形式である必要があります）")
+                return False
+
             config = self._load_accounts_config()
             accounts = config.get('accounts', [])
 
             # 対象アカウントを検索
             target_account = None
             for account in accounts:
-                if account['id'] == account_id:
+                # KeyError保護: account.get('id')を使用
+                if account.get('id') == account_id:
                     target_account = account
                     break
 
