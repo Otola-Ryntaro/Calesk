@@ -172,8 +172,8 @@ class CardRendererMixin:
                 card_radius=card_radius
             )
 
-        # カラーバー（左端、大きめ）
-        bar_color = self._get_event_color(event.color_id)
+        # カラーバー（左端、大きめ）（Phase 4: アカウント色を使用）
+        bar_color = self._parse_hex_color(event.account_color)
         draw.rectangle(
             [(hero_x + 12, hero_y + 15),
              (hero_x + 18, hero_y + hero_height - 15)],
@@ -397,9 +397,8 @@ class CardRendererMixin:
                 card_radius=min(card_radius, 8)
             )
 
-        # カラーバー（左端、縦方向）
-        color_id = event.color_id
-        bar_color = self._get_event_color(color_id)
+        # カラーバー（左端、縦方向）（Phase 4: アカウント色を使用）
+        bar_color = self._parse_hex_color(event.account_color)
 
         if is_finished:
             bar_color = tuple(min(c + 80, 255) for c in bar_color)
