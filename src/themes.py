@@ -56,7 +56,7 @@ THEMES = {
         'glass_effect': True,  # ガラスモーフィズム有効
         'glass_blur_radius': 15,  # ぼかし半径
         'glass_tint': (255, 255, 255, 50),  # 白い着色（RGBA）
-        'chromatic_offset': 1,  # RGB色相分離オフセット（控えめ）
+        'chromatic_offset': 0,  # RGB色相分離オフセット（無効化）
         'event_colors': {
             '1': (66, 133, 244),   # Google Blue
             '2': (52, 168, 83),    # Google Green
@@ -146,13 +146,89 @@ THEMES = {
         'active_text_color': (255, 255, 200),  # 進行中テキスト色（明るい黄）
         'current_time_highlight': (255, 149, 0, 50),  # 蛍光オレンジ（半透明）
         'header_bg': (20, 20, 45, 200),  # ヘッダー背景（半透明ダークネイビー）
-        'chromatic_offset': 2,  # RGB色相分離オフセット（やや強め）
+        'chromatic_offset': 0,  # RGB色相分離オフセット（無効化）
         'event_colors': {
             '1': (66, 165, 255),   # スカイブルー（明るく）
             '2': (0, 230, 118),    # ネオングリーン
             '3': (234, 128, 252),  # ネオンパープル
             '4': (255, 82, 82),    # ブライトレッド
             '5': (255, 213, 79),   # ブライトイエロー
+        }
+    },
+
+    # Luxury系テーマ（高級感のあるミニマル）
+    'luxury': {
+        'text_color': (50, 40, 30),  # ディープブラウン（上品）
+        'card_bg': (250, 248, 245),  # アイボリーホワイト
+        'card_alpha': 240,  # 94%透明度（やや透け感）
+        'card_border': (212, 175, 55),  # ゴールドアクセント
+        'card_border_width': 1,  # 繊細な枠線
+        'card_radius': 8,  # 控えめな角丸
+        'card_shadow': True,  # 洗練された影
+        'grid_color': (220, 210, 200),  # ベージュグレー
+        'accent_color': (212, 175, 55),  # アクセント（ゴールド #D4AF37）
+        'hour_label_color': (80, 70, 60),  # ディープブラウン
+        'hour_label_bg': (250, 245, 240, 210),  # 半透明クリーム
+        'hour_label_radius': 6,
+        'active_card_bg': (255, 250, 240),  # クリーム
+        'active_card_border': (212, 175, 55),  # ゴールド
+        'active_card_border_width': 2,
+        'active_text_color': (100, 80, 60),  # リッチブラウン
+        'current_time_highlight': (212, 175, 55, 40),  # ゴールド（控えめ）
+        'header_bg': (250, 245, 240, 200),  # クリーム背景
+        'glass_effect': False,  # ガラス効果はオフ（マットな質感）
+        'chromatic_offset': 0,  # 色相分離なし（シャープ）
+        # グラデーション背景設定（無効化：背景は既存テーマと同じ）
+        'background_gradient': {
+            'enabled': False,
+            'type': 'linear',
+            'colors': [(250, 245, 240), (220, 200, 170)],
+            'direction': 'vertical'
+        },
+        'event_colors': {
+            '1': (100, 80, 150),   # ディープパープル
+            '2': (50, 100, 80),    # フォレストグリーン
+            '3': (120, 90, 70),    # チョコレートブラウン
+            '4': (150, 50, 60),    # ワインレッド
+            '5': (212, 175, 55),   # ゴールド
+        }
+    },
+
+    # Playful系テーマ（遊び心のある柔らかさ）
+    'playful': {
+        'text_color': (60, 60, 80),  # ソフトネイビー
+        'card_bg': (255, 250, 245),  # ウォームホワイト
+        'card_alpha': 235,  # 92%透明度
+        'card_border': (255, 140, 120),  # コーラルピンク
+        'card_border_width': 2,  # やや太め
+        'card_radius': 20,  # 大きめの角丸（柔らかさ）
+        'card_shadow': True,  # ソフトな影
+        'grid_color': (230, 220, 210),  # ウォームグレー
+        'accent_color': (72, 209, 204),  # ターコイズ
+        'hour_label_color': (80, 80, 100),  # ソフトグレー
+        'hour_label_bg': (255, 245, 235, 200),  # 半透明ピーチ
+        'hour_label_radius': 10,
+        'active_card_bg': (255, 240, 230),  # ピーチ
+        'active_card_border': (255, 140, 120),  # コーラル
+        'active_card_border_width': 3,
+        'active_text_color': (200, 80, 60),  # リッチコーラル
+        'current_time_highlight': (72, 209, 204, 45),  # ターコイズ（明るく）
+        'header_bg': (255, 250, 240, 190),  # ウォームホワイト背景
+        'glass_effect': False,
+        'chromatic_offset': 0,
+        # グラデーション背景設定（無効化：背景は既存テーマと同じ）
+        'background_gradient': {
+            'enabled': False,
+            'type': 'radial',
+            'colors': [(255, 250, 240), (255, 220, 190), (255, 200, 170)],
+            'direction': 'vertical'
+        },
+        'event_colors': {
+            '1': (120, 180, 255),  # スカイブルー
+            '2': (100, 200, 150),  # ミントグリーン
+            '3': (200, 150, 220),  # ラベンダー
+            '4': (255, 140, 120),  # コーラル
+            '5': (255, 200, 100),  # サニーイエロー
         }
     }
 }

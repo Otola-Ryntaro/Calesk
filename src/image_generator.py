@@ -248,21 +248,40 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
     ) -> Optional[Path]:
         """壁紙画像を生成"""
         try:
-            # カスタム背景画像が設定されている場合はそちらを優先
-            bg_path = self._custom_background_path or BACKGROUND_IMAGE_PATH
-            if bg_path and Path(bg_path).exists():
-                logger.info(f"背景画像を読み込んでいます: {bg_path}")
-                background = Image.open(bg_path)
-                background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
-                # RGBAモードに変換（半透明カード対応）
-                if background.mode != 'RGBA':
-                    image = background.convert('RGBA')
-                else:
-                    image = background
+            # グラデーション背景設定を確認
+            gradient_config = self.theme.get('background_gradient', {})
+            gradient_enabled = gradient_config.get('enabled', False)
+
+            if gradient_enabled:
+                # グラデーション背景を生成
+                logger.info("グラデーション背景を生成します")
+                gradient_type = gradient_config.get('type', 'linear')
+                colors = gradient_config.get('colors', None)
+                direction = gradient_config.get('direction', 'vertical')
+
+                image = self._create_gradient_background(
+                    width=self.width,
+                    height=self.height,
+                    gradient_type=gradient_type,
+                    colors=colors,
+                    direction=direction
+                )
             else:
-                # デフォルト背景（白、RGBAモード）
-                logger.info("デフォルト背景を生成します")
-                image = Image.new('RGBA', (self.width, self.height), (255, 255, 255, 255))
+                # カスタム背景画像が設定されている場合はそちらを優先
+                bg_path = self._custom_background_path or BACKGROUND_IMAGE_PATH
+                if bg_path and Path(bg_path).exists():
+                    logger.info(f"背景画像を読み込んでいます: {bg_path}")
+                    background = Image.open(bg_path)
+                    background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                    # RGBAモードに変換（半透明カード対応）
+                    if background.mode != 'RGBA':
+                        image = background.convert('RGBA')
+                    else:
+                        image = background
+                else:
+                    # デフォルト背景（白、RGBAモード）
+                    logger.info("デフォルト背景を生成します")
+                    image = Image.new('RGBA', (self.width, self.height), (255, 255, 255, 255))
 
             draw = ImageDraw.Draw(image)
 

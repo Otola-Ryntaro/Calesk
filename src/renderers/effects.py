@@ -408,3 +408,115 @@ class EffectsRendererMixin:
             )
             image.alpha_composite(overlay)
             draw = ImageDraw.Draw(image)
+
+    def _create_gradient_background(
+        self,
+        width: int,
+        height: int,
+        gradient_type: str = 'linear',
+        colors: List[Tuple[int, int, int]] = None,
+        direction: str = 'vertical'
+    ) -> Image.Image:
+        """グラデーション背景画像を生成（高速版：rectangleを使用）
+
+        Args:
+            width: 画像幅
+            height: 画像高さ
+            gradient_type: グラデーションタイプ（'linear', 'radial'）
+            colors: グラデーション色のリスト [(R,G,B), ...]
+                    Noneの場合はデフォルト色（白系グラデーション）
+            direction: 線形グラデーションの方向（'vertical', 'horizontal', 'diagonal'）
+
+        Returns:
+            Image.Image: RGBA形式のグラデーション背景画像
+        """
+        # デフォルト色（クリーム系の白グラデーション）
+        if colors is None:
+            colors = [(255, 255, 255), (245, 245, 240)]
+
+        # 背景画像を作成
+        image = Image.new('RGBA', (width, height))
+        draw = ImageDraw.Draw(image)
+
+        if gradient_type == 'radial':
+            # 放射状グラデーション（簡易版：同心円状に描画）
+            center_x, center_y = width / 2, height / 2
+            max_radius = ((width / 2) ** 2 + (height / 2) ** 2) ** 0.5
+
+            # 最初に全体を一番外側の色で塗りつぶし
+            outer_color = self._interpolate_gradient_color(colors, 1.0)
+            draw.rectangle([(0, 0), (width, height)], fill=outer_color + (255,))
+
+            # 半径方向に段階的に描画（200ステップで十分滑らか）
+            steps = min(200, int(max_radius))
+            for i in range(steps, 0, -1):
+                ratio = i / steps
+                color = self._interpolate_gradient_color(colors, ratio)
+                radius = int(max_radius * ratio)
+
+                # 円を描画
+                bbox = [
+                    int(center_x - radius), int(center_y - radius),
+                    int(center_x + radius), int(center_y + radius)
+                ]
+                draw.ellipse(bbox, fill=color + (255,))
+
+        else:
+            # 線形グラデーション（高速版：1行ずつrectangle）
+            if direction == 'horizontal':
+                # 水平方向
+                for x in range(width):
+                    ratio = x / width
+                    color = self._interpolate_gradient_color(colors, ratio)
+                    draw.rectangle([(x, 0), (x, height)], fill=color + (255,))
+            elif direction == 'diagonal':
+                # 斜め方向（Y方向で描画）
+                for y in range(height):
+                    # 斜め方向の平均的な比率
+                    ratio = y / height
+                    color = self._interpolate_gradient_color(colors, ratio)
+                    draw.rectangle([(0, y), (width, y)], fill=color + (255,))
+            else:  # vertical（デフォルト）
+                # 垂直方向
+                for y in range(height):
+                    ratio = y / height
+                    color = self._interpolate_gradient_color(colors, ratio)
+                    draw.rectangle([(0, y), (width, y)], fill=color + (255,))
+
+        return image
+
+    def _interpolate_gradient_color(
+        self,
+        colors: List[Tuple[int, int, int]],
+        ratio: float
+    ) -> Tuple[int, int, int]:
+        """グラデーション色を補間
+
+        複数色のグラデーションに対応（2色以上）
+
+        Args:
+            colors: 色のリスト [(R,G,B), ...]
+            ratio: 補間位置（0.0 ~ 1.0）
+
+        Returns:
+            Tuple[int, int, int]: 補間された色 (R, G, B)
+        """
+        if len(colors) == 1:
+            return colors[0]
+
+        # 補間位置を計算
+        segment_count = len(colors) - 1
+        segment_ratio = ratio * segment_count
+        segment_index = int(segment_ratio)
+
+        # 最後のセグメントを超えないようにクリップ
+        if segment_index >= segment_count:
+            return colors[-1]
+
+        # セグメント内の補間率
+        local_ratio = segment_ratio - segment_index
+
+        # 2色間を線形補間
+        color1 = colors[segment_index]
+        color2 = colors[segment_index + 1]
+        return self._interpolate_color(color1, color2, local_ratio)

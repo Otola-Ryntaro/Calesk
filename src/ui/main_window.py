@@ -252,7 +252,12 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def _on_settings_clicked(self):
         """「設定」ボタンがクリックされたときの処理"""
-        dialog = SettingsDialog(self.settings_service, parent=self)
+        # ViewModelからCalendarClientを取得
+        calendar_client = None
+        if hasattr(self.viewmodel, '_wallpaper_service') and self.viewmodel._wallpaper_service:
+            calendar_client = self.viewmodel._wallpaper_service.calendar_client
+
+        dialog = SettingsDialog(self.settings_service, calendar_client=calendar_client, parent=self)
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted.value:

@@ -84,6 +84,18 @@ def window_with_mock(qtbot, mock_viewmodel, tmp_path):
     from src.viewmodels.settings_service import SettingsService
 
     settings_service = SettingsService(settings_dir=tmp_path)
+
+    # calendar_clientのモックを追加
+    mock_calendar_client = Mock()
+    mock_calendar_client.accounts = {}  # 空の辞書としてモック化
+
+    # wallpaper_serviceのモックを追加
+    mock_wallpaper_service = Mock()
+    mock_wallpaper_service.calendar_client = mock_calendar_client
+
+    # viewmodelに_wallpaper_serviceを設定
+    mock_viewmodel._wallpaper_service = mock_wallpaper_service
+
     window = MainWindow(viewmodel=mock_viewmodel, settings_service=settings_service)
     qtbot.addWidget(window)
     return window
