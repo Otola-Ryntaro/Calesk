@@ -11,7 +11,7 @@ from typing import Any, Optional
 from ..config import (
     THEME, AUTO_UPDATE_INTERVAL_MINUTES, AUTO_UPDATE_ENABLED_DEFAULT,
     AUTO_DETECT_RESOLUTION, WALLPAPER_TARGET_DESKTOP,
-    BACKGROUND_IMAGE_PATH, CARD_SHADOW_ENABLED,
+    CARD_SHADOW_ENABLED, DEFAULT_PRESET_BACKGROUND,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class SettingsService:
         "theme": THEME,
         "auto_update_enabled": AUTO_UPDATE_ENABLED_DEFAULT,
         "auto_update_interval_minutes": AUTO_UPDATE_INTERVAL_MINUTES,
-        "background_image_path": str(BACKGROUND_IMAGE_PATH) if BACKGROUND_IMAGE_PATH else None,
+        "background_image_path": f"preset:{DEFAULT_PRESET_BACKGROUND}",
         "auto_detect_resolution": AUTO_DETECT_RESOLUTION,
         "wallpaper_target_desktop": WALLPAPER_TARGET_DESKTOP,
         "card_shadow_enabled": CARD_SHADOW_ENABLED,

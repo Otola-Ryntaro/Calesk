@@ -422,12 +422,31 @@ class MainViewModel(ViewModelBase):
         self.background_image_changed.emit(path)
         logger.info(f"背景画像を設定しました: {path}")
 
+    def set_preset_background(self, filename: str):
+        """
+        プリセット背景画像を設定
+
+        Args:
+            filename: プリセット画像のファイル名（例: 'sky.png'）
+        """
+        from src.config import BACKGROUNDS_DIR
+        path = BACKGROUNDS_DIR / filename
+        if not path.exists():
+            error_msg = f"プリセット背景が見つかりません: {filename}"
+            logger.error(error_msg)
+            self.error_occurred.emit(error_msg)
+            return
+
+        self._background_image_path = path
+        self._wallpaper_service.set_background_image(path)
+        self.background_image_changed.emit(path)
+        logger.info(f"プリセット背景画像を設定しました: {filename}")
+
     def reset_background_image(self):
-        """背景画像をデフォルトに戻す"""
-        self._background_image_path = None
-        self._wallpaper_service.reset_background_image()
-        self.background_image_changed.emit(None)
-        logger.info("背景画像をデフォルトに戻しました")
+        """背景画像をデフォルトプリセットに戻す"""
+        from src.config import DEFAULT_PRESET_BACKGROUND
+        self.set_preset_background(DEFAULT_PRESET_BACKGROUND)
+        logger.info("背景画像をデフォルトプリセットに戻しました")
 
     # === 自動更新機能 ===
 

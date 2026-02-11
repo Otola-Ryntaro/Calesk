@@ -42,12 +42,13 @@ class TestViewModelBackgroundImage:
         assert vm.background_image_path == test_path
 
     def test_reset_background_image(self, tmp_path):
-        """背景画像をデフォルトに戻せること"""
+        """背景画像をデフォルトプリセットに戻せること"""
+        from src.config import BACKGROUNDS_DIR, DEFAULT_PRESET_BACKGROUND
         vm = self._create_viewmodel()
         test_path = self._create_test_image(tmp_path)
         vm.set_background_image(test_path)
         vm.reset_background_image()
-        assert vm.background_image_path is None
+        assert vm.background_image_path == BACKGROUNDS_DIR / DEFAULT_PRESET_BACKGROUND
 
     def test_background_image_changed_signal(self, qtbot, tmp_path):
         """背景画像変更時にシグナルが発信されること"""
@@ -59,12 +60,13 @@ class TestViewModelBackgroundImage:
 
     def test_reset_emits_signal(self, qtbot, tmp_path):
         """背景画像リセット時にシグナルが発信されること"""
+        from src.config import BACKGROUNDS_DIR, DEFAULT_PRESET_BACKGROUND
         vm = self._create_viewmodel()
         test_path = self._create_test_image(tmp_path)
         vm.set_background_image(test_path)
         with qtbot.waitSignal(vm.background_image_changed, timeout=1000) as blocker:
             vm.reset_background_image()
-        assert blocker.args[0] is None
+        assert blocker.args[0] == BACKGROUNDS_DIR / DEFAULT_PRESET_BACKGROUND
 
     def test_set_background_passes_to_service(self, tmp_path):
         """背景画像パスがWallpaperServiceに渡されること"""

@@ -206,10 +206,15 @@ ICON_WINDOWS_POSITION = (IMAGE_WIDTH - 60, IMAGE_HEIGHT - 60)  # Windows: 右下
 ICON_LINUX_POSITION = (IMAGE_WIDTH - 60, 20)  # Linux: Mac同様
 
 # === 背景画像設定 ===
-# 背景画像を使用する場合は、画像ファイルのパスを指定
-# None の場合は透明背景、パスを指定すると背景画像の上にカレンダーを描画
-BACKGROUND_IMAGE_PATH = BASE_DIR / 'backgrounds' / 'default_background.png'
-# BACKGROUND_IMAGE_PATH = None  # 透明背景の場合
+# プリセット背景画像の定義（著作権フリー画像）
+PRESET_BACKGROUNDS = [
+    {"name": "青空", "file": "sky.png"},
+    {"name": "ビーチ", "file": "beach.png"},
+    {"name": "夕焼け", "file": "sunset.png"},
+]
+DEFAULT_PRESET_BACKGROUND = "sky.png"
+BACKGROUNDS_DIR = BASE_DIR / 'backgrounds'
+BACKGROUND_IMAGE_PATH = BACKGROUNDS_DIR / DEFAULT_PRESET_BACKGROUND
 
 # === 自動更新設定 ===
 AUTO_UPDATE_INTERVAL_MINUTES = 60  # 自動更新間隔（分）

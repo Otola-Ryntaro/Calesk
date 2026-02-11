@@ -47,10 +47,10 @@ class TestSettingsServiceDefaults:
         assert service.get("auto_update_interval_minutes") == 60
 
     def test_default_background_image(self, tmp_path):
-        """デフォルト背景画像がconfig.pyの値と一致すること"""
-        from src.config import BACKGROUND_IMAGE_PATH
+        """デフォルト背景画像がpreset:形式であること"""
+        from src.config import DEFAULT_PRESET_BACKGROUND
         service = SettingsService(settings_dir=tmp_path)
-        expected = str(BACKGROUND_IMAGE_PATH) if BACKGROUND_IMAGE_PATH else None
+        expected = f"preset:{DEFAULT_PRESET_BACKGROUND}"
         assert service.get("background_image_path") == expected
 
     def test_default_auto_detect_resolution(self, tmp_path):

@@ -77,6 +77,9 @@ class MainWindow(QMainWindow):
         # システムトレイアイコンの初期化
         self._setup_tray_icon()
 
+        # 背景画像設定を復元
+        self._restore_background_setting()
+
         logger.info("MainWindowを初期化しました")
 
     def _setup_control_area(self, parent_layout):
@@ -122,31 +125,29 @@ class MainWindow(QMainWindow):
         Args:
             parent_layout: 親レイアウト
         """
+        from src.config import PRESET_BACKGROUNDS
+
         bg_layout = QHBoxLayout()
 
         # 背景画像ラベル
         bg_label = QLabel("背景画像:")
         bg_layout.addWidget(bg_label)
 
-        # 現在の背景画像ファイル名
-        self.bg_filename_label = QLabel("デフォルト")
-        self.bg_filename_label.setObjectName("bg_filename_label")
-        bg_layout.addWidget(self.bg_filename_label)
+        # プリセット選択コンボボックス
+        self.bg_combo = QComboBox()
+        self.bg_combo.setObjectName("bg_combo")
+        for preset in PRESET_BACKGROUNDS:
+            self.bg_combo.addItem(preset["name"], preset["file"])
+        self.bg_combo.currentIndexChanged.connect(self._on_background_combo_changed)
+        bg_layout.addWidget(self.bg_combo)
 
         bg_layout.addStretch()
 
-        # 「背景画像を選択」ボタン
-        self.bg_select_button = QPushButton("背景画像を選択")
+        # 「カスタム画像を選択」ボタン
+        self.bg_select_button = QPushButton("カスタム画像を選択")
         self.bg_select_button.setObjectName("bg_select_button")
         self.bg_select_button.clicked.connect(self._on_select_background)
         bg_layout.addWidget(self.bg_select_button)
-
-        # 「デフォルトに戻す」ボタン
-        self.bg_reset_button = QPushButton("デフォルトに戻す")
-        self.bg_reset_button.setObjectName("bg_reset_button")
-        self.bg_reset_button.clicked.connect(self._on_reset_background)
-        self.bg_reset_button.setEnabled(False)  # 初期状態では無効
-        bg_layout.addWidget(self.bg_reset_button)
 
         parent_layout.addLayout(bg_layout)
 
@@ -285,9 +286,21 @@ class MainWindow(QMainWindow):
         # ViewModelに壁紙適用を依頼
         self.viewmodel.apply_wallpaper()
 
+    def _on_background_combo_changed(self, index: int):
+        """背景画像コンボボックスの選択変更"""
+        if index < 0:
+            return
+        data = self.bg_combo.itemData(index)
+        if data and not data.startswith("custom:"):
+            # プリセット選択
+            self.viewmodel.set_preset_background(data)
+            self._save_background_setting(f"preset:{data}")
+            self.statusBar().showMessage(f"背景画像: {self.bg_combo.itemText(index)}")
+            self.viewmodel.preview_theme(self.viewmodel.current_theme)
+
     @pyqtSlot()
     def _on_select_background(self):
-        """背景画像を選択するファイルダイアログを表示"""
+        """カスタム背景画像を選択するファイルダイアログを表示"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "背景画像を選択",
@@ -298,23 +311,60 @@ class MainWindow(QMainWindow):
         if file_path:
             path = Path(file_path)
             self.viewmodel.set_background_image(path)
-            self.bg_filename_label.setText(path.name)
-            self.bg_reset_button.setEnabled(True)
+            # コンボボックスにカスタム項目を追加/更新
+            custom_label = f"カスタム: {path.name}"
+            self._set_custom_combo_item(custom_label, f"custom:{file_path}")
+            self._save_background_setting(str(file_path))
             self.statusBar().showMessage(f"背景画像を設定しました: {path.name}")
-            # 背景変更後にプレビューを再生成
             self.viewmodel.preview_theme(self.viewmodel.current_theme)
             logger.info(f"背景画像を選択しました: {file_path}")
 
-    @pyqtSlot()
-    def _on_reset_background(self):
-        """背景画像をデフォルトに戻す"""
-        self.viewmodel.reset_background_image()
-        self.bg_filename_label.setText("デフォルト")
-        self.bg_reset_button.setEnabled(False)
-        self.statusBar().showMessage("背景画像をデフォルトに戻しました")
-        # デフォルト復帰後にプレビューを再生成
-        self.viewmodel.preview_theme(self.viewmodel.current_theme)
-        logger.info("背景画像をデフォルトに戻しました")
+    def _set_custom_combo_item(self, label: str, data: str):
+        """コンボボックスのカスタム項目を設定"""
+        # 既存のカスタム項目を探す
+        for i in range(self.bg_combo.count()):
+            item_data = self.bg_combo.itemData(i)
+            if item_data and str(item_data).startswith("custom:"):
+                self.bg_combo.setItemText(i, label)
+                self.bg_combo.setItemData(i, data)
+                self.bg_combo.blockSignals(True)
+                self.bg_combo.setCurrentIndex(i)
+                self.bg_combo.blockSignals(False)
+                return
+        # カスタム項目がなければ追加
+        self.bg_combo.blockSignals(True)
+        self.bg_combo.addItem(label, data)
+        self.bg_combo.setCurrentIndex(self.bg_combo.count() - 1)
+        self.bg_combo.blockSignals(False)
+
+    def _save_background_setting(self, value: str):
+        """背景画像設定を永続化"""
+        self.settings_service.set("background_image_path", value)
+        self.settings_service.save()
+
+    def _restore_background_setting(self):
+        """起動時に背景画像設定を復元"""
+        bg_value = self.settings_service.get("background_image_path", "")
+        if not bg_value:
+            return
+
+        if bg_value.startswith("preset:"):
+            filename = bg_value[len("preset:"):]
+            # コンボボックスからプリセットを選択
+            for i in range(self.bg_combo.count()):
+                if self.bg_combo.itemData(i) == filename:
+                    self.bg_combo.blockSignals(True)
+                    self.bg_combo.setCurrentIndex(i)
+                    self.bg_combo.blockSignals(False)
+                    self.viewmodel.set_preset_background(filename)
+                    return
+        else:
+            # カスタム画像パス
+            path = Path(bg_value)
+            if path.exists():
+                self.viewmodel.set_background_image(path)
+                custom_label = f"カスタム: {path.name}"
+                self._set_custom_combo_item(custom_label, f"custom:{bg_value}")
 
     @pyqtSlot()
     def _on_update_started(self):

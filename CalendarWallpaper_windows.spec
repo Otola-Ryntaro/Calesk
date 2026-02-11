@@ -8,6 +8,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('src', 'src'),
+        ('backgrounds', 'backgrounds'),
         # credentials は含めない -- 実行時にユーザーのホームディレクトリから読み込む
     ],
     hiddenimports=[
