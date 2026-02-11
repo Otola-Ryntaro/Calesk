@@ -1,0 +1,98 @@
+# macOS / Windows 自動ビルドワークフロー
+# タグ push (v*) またはリリース作成時にビルドを実行し、成果物をアップロード
+
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build macOS app
+        run: |
+          pyinstaller CalendarWallpaper.spec --clean --noconfirm
+
+      - name: Create ZIP archive
+        run: |
+          cd dist
+          zip -r CalendarWallpaper-macOS.zip CalendarWallpaper.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CalendarWallpaper-macOS
+          path: dist/CalendarWallpaper-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Windows exe
+        run: |
+          pyinstaller CalendarWallpaper_windows.spec --clean --noconfirm
+
+      - name: Create ZIP archive
+        run: |
+          Compress-Archive -Path dist\CalendarWallpaper -DestinationPath dist\CalendarWallpaper-Windows.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CalendarWallpaper-Windows
+          path: dist/CalendarWallpaper-Windows.zip
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CalendarWallpaper-macOS
+          path: artifacts/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CalendarWallpaper-Windows
+          path: artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/CalendarWallpaper-macOS.zip
+            artifacts/CalendarWallpaper-Windows.zip
+          generate_release_notes: true

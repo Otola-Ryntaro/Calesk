@@ -4,17 +4,78 @@
 
 ## 目次
 
-1. [インストールと初期設定](#インストールと初期設定)
-2. [基本的な使い方](#基本的な使い方)
-3. [テーマのカスタマイズ](#テーマのカスタマイズ)
-4. [詳細設定](#詳細設定)
-5. [自動起動の設定](#自動起動の設定)
-6. [トラブルシューティング](#トラブルシューティング)
-7. [開発者向け情報](#開発者向け情報)
+1. [かんたんインストール（Python不要）](#かんたんインストールpython不要)
+2. [開発者向けインストール（Python環境）](#開発者向けインストールpython環境)
+3. [Google Calendar API設定（全員必須）](#google-calendar-api設定全員必須)
+4. [基本的な使い方](#基本的な使い方)
+5. [複数Googleアカウントの設定](#複数googleアカウントの設定)
+6. [テーマのカスタマイズ](#テーマのカスタマイズ)
+7. [詳細設定](#詳細設定)
+8. [自動起動の設定](#自動起動の設定)
+9. [トラブルシューティング](#トラブルシューティング)
+10. [開発者向け情報](#開発者向け情報)
 
 ---
 
-## インストールと初期設定
+## かんたんインストール（Python不要）
+
+プログラミングの知識がなくても使えるインストール方法です。
+Pythonのインストールは不要です。
+
+### macOS
+
+1. [Releases](../../releases) ページから最新の `CalendarWallpaper.app.zip` をダウンロード
+2. ZIPファイルをダブルクリックして展開
+3. `CalendarWallpaper.app` を「アプリケーション」フォルダにドラッグ&ドロップ
+
+**初回起動時の注意（macOS Gatekeeper）**:
+
+macOSのセキュリティ機能により、初回起動時にブロックされることがあります。
+
+1. `CalendarWallpaper.app` を右クリック（またはControlキーを押しながらクリック）
+2. メニューから「開く」を選択
+3. 「開く」ボタンをクリック（「開発元を検証できません」と表示されますが問題ありません）
+
+> 2回目以降はダブルクリックで普通に起動できます。
+
+### 自分でビルドする場合
+
+ソースコードからmacOSアプリをビルドすることもできます。
+Python環境が必要です（[開発者向けインストール](#開発者向けインストールpython環境)を先に完了してください）。
+
+```bash
+# ビルドスクリプトを実行
+bash scripts/build_app.sh
+```
+
+ビルドが完了すると `dist/CalendarWallpaper.app` が生成されます。
+
+### Windows
+
+1. [Releases](../../releases) ページから最新の `CalendarWallpaper-Windows.zip` をダウンロード
+2. ZIPファイルを右クリック →「すべて展開」
+3. 展開されたフォルダ内の `CalendarWallpaper.exe` をダブルクリックで起動
+
+**初回起動時の注意（Windows SmartScreen）**:
+
+Windows Defenderの SmartScreen により、初回起動時に警告が表示されることがあります。
+
+1. 「WindowsによってPCが保護されました」と表示される
+2. 「**詳細情報**」をクリック
+3. 「**実行**」をクリック
+
+> 2回目以降は警告なしで起動できます。
+
+**推奨**: `CalendarWallpaper` フォルダごと好きな場所（例: `C:\Users\ユーザー名\Apps\`）に移動して使用してください。
+
+### Linux
+
+現在、ビルド済みバイナリはmacOSとWindowsのみ提供しています。
+Linuxでは [開発者向けインストール](#開発者向けインストールpython環境) の手順でPython環境からご利用ください。
+
+---
+
+## 開発者向けインストール（Python環境）
 
 ### システム要件
 
@@ -23,6 +84,21 @@
 - **メモリ**: 512MB以上
 - **ディスク**: 100MB以上の空き容量
 - **インターネット**: Google Calendar API接続に必要
+
+### インストール手順
+
+```bash
+# 1. リポジトリのクローン
+git clone <repository-url>
+cd calender_desktop
+
+# 2. 仮想環境の作成と有効化
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 3. 依存パッケージのインストール
+pip install -r requirements.txt
+```
 
 ### 依存パッケージ
 
@@ -38,45 +114,195 @@ schedule                  # スケジューラー
 python-dotenv             # 環境変数管理
 ```
 
-### Google Calendar API設定（詳細）
+---
 
-#### 1. Google Cloud Consoleでプロジェクト作成
+## Google Calendar API設定（全員必須）
 
-1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. 「プロジェクトを作成」をクリック
-3. プロジェクト名を入力（例: "カレンダー壁紙アプリ"）
+このアプリはGoogleカレンダーから予定を取得するため、Google Cloud上でAPI設定が必要です。
+初回のみ10〜15分ほどかかりますが、一度設定すれば以降は自動で動作します。
 
-#### 2. Google Calendar APIを有効化
+> **必要なもの**: Googleアカウント（Gmailアドレス）、Webブラウザ
 
-1. 「APIとサービス」→「ライブラリ」に移動
-2. "Google Calendar API"を検索
-3. 「有効にする」をクリック
+### ステップ1: Google Cloud Consoleにアクセス
 
-#### 3. OAuth 2.0クライアントIDを作成
+1. ブラウザで [Google Cloud Console](https://console.cloud.google.com/) を開く
+2. Googleアカウントでログインする（普段使っているGmailアカウントでOK）
 
-1. 「APIとサービス」→「認証情報」に移動
-2. 「認証情報を作成」→「OAuth クライアント ID」を選択
-3. アプリケーションの種類: **デスクトップアプリ**
-4. 名前を入力（例: "カレンダー壁紙アプリクライアント"）
-5. 「作成」をクリック
+> 初めてGoogle Cloud Consoleを使う場合、利用規約への同意画面が表示されます。
+> 「同意して続行」をクリックしてください。
+> **料金は一切かかりません**。Google Calendar APIは無料で利用できます。
 
-#### 4. credentials.jsonのダウンロード
+### ステップ2: プロジェクトを作成
 
-1. 作成した認証情報の右側にあるダウンロードアイコンをクリック
-2. ダウンロードしたファイルを`credentials.json`にリネーム
-3. `credentials/`ディレクトリに配置
+Google Cloud上に「プロジェクト」という入れ物を作ります。
 
-#### 5. 初回認証
+1. 画面上部の「プロジェクトを選択」をクリック
+   - 初めての場合は「My First Project」と表示されているかもしれません
+2. 開いたダイアログの右上にある「新しいプロジェクト」をクリック
+3. 以下を入力:
+   - **プロジェクト名**: `calendar-wallpaper`（好きな名前でOK）
+   - **場所**: 「組織なし」のままでOK
+4. 「作成」をクリック
+5. 数秒待つと作成完了の通知が表示される
+6. 通知の「プロジェクトを選択」をクリック（または画面上部のプロジェクト名をクリックして切り替え）
+
+### ステップ3: Google Calendar APIを有効にする
+
+1. 左側メニューの「APIとサービス」をクリック
+   - メニューが見えない場合は、左上の「三（ハンバーガーメニュー）」をクリック
+2. 「ライブラリ」をクリック
+3. 検索欄に `Google Calendar API` と入力
+4. 検索結果から「**Google Calendar API**」をクリック（「Google Calendar」ではなく「Google Calendar **API**」を選択）
+5. 青い「**有効にする**」ボタンをクリック
+6. 有効化が完了すると、APIの詳細ページに移動する
+
+### ステップ4: OAuth同意画面を設定する
+
+アプリがGoogleアカウントにアクセスする際の許可画面を設定します。
+**これを設定しないと、次のステップでOAuthクライアントIDを作成できません。**
+
+1. 左側メニューの「APIとサービス」→「OAuth同意画面」をクリック
+2. 「**アプリ情報を編集する**」または「**はじめに**」をクリック
+
+   **ユーザーの種類を選択する画面が表示された場合**:
+
+   - 「**外部**」を選択して「作成」をクリック
+   - （「内部」はGoogle Workspace組織専用なので、個人利用では「外部」を選択）
+
+3. 以下を入力:
+   - **アプリ名**: `Calendar Wallpaper`（好きな名前でOK）
+   - **ユーザーサポートメール**: 自分のGmailアドレスを選択
+   - **デベロッパーの連絡先情報**: 自分のGmailアドレスを入力
+   - それ以外の項目（アプリのロゴ、アプリのホームページなど）は**空欄のまま**でOK
+4. 「**保存して次へ**」をクリック
+
+5. 「スコープ」画面:
+   - 「**スコープを追加または削除**」をクリック
+   - フィルタに `calendar` と入力
+   - 「**Google Calendar API**」の `.../auth/calendar.readonly`（カレンダーの読み取り）にチェック
+   - 「**更新**」をクリック
+   - 「**保存して次へ**」をクリック
+
+   > スコープを追加しなくても動作しますが、設定しておくと認証画面でどの権限を要求しているか明示されます。
+
+6. 「テストユーザー」画面:
+   - 「**+ ADD USERS**」をクリック
+   - **自分のGmailアドレス**を入力して「**追加**」をクリック
+   - 「**保存して次へ**」をクリック
+
+   > **重要**: テストユーザーに自分のメールアドレスを追加しないと、認証時に「アクセスがブロックされました」というエラーが表示されます。
+   > 家族や友人に配布する場合は、その人のGmailアドレスもここに追加してください。
+
+7. 「概要」画面で内容を確認し、「**ダッシュボードに戻る**」をクリック
+
+### ステップ5: OAuthクライアントIDを作成する
+
+1. 左側メニューの「APIとサービス」→「認証情報」をクリック
+2. 画面上部の「**+ 認証情報を作成**」をクリック
+3. 「**OAuthクライアントID**」を選択
+4. 以下を入力:
+   - **アプリケーションの種類**: 「**デスクトップアプリ**」を選択
+   - **名前**: `Calendar Wallpaper Client`（好きな名前でOK）
+5. 「**作成**」をクリック
+
+6. 「OAuthクライアントを作成しました」というダイアログが表示される
+   - **「JSONをダウンロード」をクリック**
+   - JSONファイルがダウンロードされる（`client_secret_XXXXX.json` のような名前）
+
+> ダウンロードし忘れた場合は、「認証情報」ページで作成したクライアントIDの右にあるダウンロードアイコン（下矢印マーク）をクリックすると再ダウンロードできます。
+
+### ステップ6: credentials.jsonを配置する
+
+ダウンロードしたJSONファイルをアプリが読み取れる場所に配置します。
+
+#### アプリ版（macOS .app）の場合
 
 ```bash
-# 認証フローを実行
+# 1. ホームディレクトリに設定フォルダを作成
+mkdir -p ~/.calendar_wallpaper/credentials
+
+# 2. ダウンロードしたファイルをコピー&リネーム
+cp ~/Downloads/client_secret_XXXXX.json ~/.calendar_wallpaper/credentials/credentials.json
+```
+
+> `client_secret_XXXXX.json` の部分は実際にダウンロードされたファイル名に置き換えてください。
+
+#### アプリ版（Windows .exe）の場合
+
+1. エクスプローラーで `C:\Users\ユーザー名\.calendar_wallpaper\credentials\` フォルダを作成
+   - `Win + R` → `%USERPROFILE%` と入力して Enter
+   - `.calendar_wallpaper` フォルダを新規作成 → その中に `credentials` フォルダを新規作成
+2. ダウンロードした `client_secret_XXXXX.json` を上記フォルダにコピー
+3. ファイル名を `credentials.json` に変更
+
+> フォルダが見えない場合は、エクスプローラーの「表示」→「隠しファイル」にチェックを入れてください。
+
+#### Python版の場合
+
+```bash
+# 1. プロジェクト内にcredentialsフォルダを作成（既にある場合は不要）
+mkdir -p credentials
+
+# 2. ダウンロードしたファイルをコピー&リネーム
+cp ~/Downloads/client_secret_XXXXX.json credentials/credentials.json
+```
+
+**確認**: 以下のようなフォルダ構成になっていればOKです。
+
+```text
+calender_desktop/
+├── credentials/
+│   └── credentials.json    <-- このファイルがあればOK
+├── src/
+├── main.py
+...
+```
+
+### ステップ7: 初回認証を実行する
+
+アプリを起動すると、ブラウザが自動的に開きます。
+
+#### Python版で認証する場合
+
+```bash
 python main.py --auth
 ```
 
-ブラウザが開き、以下の手順が実行されます：
-1. Googleアカウントでログイン
-2. アプリにカレンダーへのアクセス許可を付与
-3. `token.json`が自動生成される
+#### アプリ版で認証する場合
+
+CalendarWallpaper.appをダブルクリックして起動してください。
+
+#### ブラウザでの認証手順
+
+1. ブラウザが開き、Googleアカウントの選択画面が表示される
+2. カレンダーを使いたいGoogleアカウントを選択
+
+3. **「このアプリはGoogleで確認されていません」** という警告画面が表示される
+
+   > これは自分で作成したアプリなので正常な表示です。心配ありません。
+
+   - 「**詳細**」をクリック（画面下部の小さいリンク）
+   - 「**Calendar Wallpaper（安全ではないページ）に移動**」をクリック
+
+4. 「Calendar WallpaperがGoogleアカウントへのアクセスをリクエストしています」という画面が表示される
+   - 「**許可**」をクリック
+
+5. 「認証が完了しました」というメッセージが表示される（またはブラウザタブを閉じてOK）
+
+6. `credentials/token.json` が自動生成される
+
+> 認証は初回のみ必要です。2回目以降はtoken.jsonを使って自動的にログインします。
+> トークンの有効期限が切れた場合も自動更新されるため、通常は再認証不要です。
+
+### よくあるエラーと対処法
+
+| エラーメッセージ | 原因 | 対処法 |
+| --- | --- | --- |
+| `credentials.json not found` | JSONファイルが正しい場所にない | ステップ6を確認。ファイル名が`credentials.json`であることも確認 |
+| `アクセスがブロックされました` | テストユーザーに未追加 | ステップ4の手順6でGmailアドレスを追加 |
+| `redirect_uri_mismatch` | アプリケーションの種類が違う | ステップ5で「デスクトップアプリ」を選択し直す |
+| `invalid_client` | credentials.jsonの中身が壊れている | ステップ5からJSONを再ダウンロード |
+| ブラウザが開かない | ネットワークまたは環境の問題 | ターミナルに表示されるURLを手動でブラウザに貼り付け |
 
 ---
 
@@ -87,22 +313,25 @@ python main.py --auth
 #### 起動方法
 
 ```bash
+# Python版
 python run_gui.py
+
+# アプリ版: CalendarWallpaper.appをダブルクリック
 ```
 
 #### GUI画面の構成
 
-```
-┌─────────────────────────────────────────┐
-│ カレンダー壁紙アプリ                     │
-├─────────────────────────────────────────┤
-│ テーマ: [simple ▼]  [今すぐ更新]         │
-├─────────────────────────────────────────┤
-│                                         │
-│         壁紙プレビュー表示エリア          │
-│                                         │
-│                                         │
-└─────────────────────────────────────────┘
+```text
++---------------------------------------------+
+| カレンダー壁紙アプリ                          |
++---------------------------------------------+
+| テーマ: [simple ▼]  [今すぐ更新]              |
++---------------------------------------------+
+|                                             |
+|         壁紙プレビュー表示エリア              |
+|                                             |
+|                                             |
++---------------------------------------------+
 ```
 
 #### 操作手順
@@ -132,12 +361,14 @@ python main.py --daemon
 ```
 
 **機能**:
+
 - 毎日6:00に壁紙を自動更新
 - 5分ごとにイベント通知をチェック
 - 予定開始5分前にデスクトップ通知
 - 重複通知を自動防止
 
 **停止方法**:
+
 ```bash
 # プロセスIDを確認
 ps aux | grep "python main.py --daemon"
@@ -145,6 +376,72 @@ ps aux | grep "python main.py --daemon"
 # プロセスを停止
 kill <プロセスID>
 ```
+
+---
+
+## 複数Googleアカウントの設定
+
+仕事用・プライベート用など、複数のGoogleアカウントのカレンダーを1枚の壁紙にまとめて表示できます。
+
+### 事前準備（Google Cloud Console側）
+
+複数アカウントを使う場合、**追加するすべてのGmailアドレスをGoogle Cloud Consoleのテストユーザーに登録する**必要があります。
+これを忘れると「アクセスがブロックされました」エラーが出ます。
+
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+2. 左側メニューの「APIとサービス」→「OAuth同意画面」をクリック
+3. 画面下部の「テストユーザー」セクションを探す
+4. 「**+ ADD USERS**」をクリック
+5. 追加したいGoogleアカウントのGmailアドレスを入力して「**追加**」をクリック
+6. **登録するアカウントの数だけこの操作を繰り返す**
+
+> 例: 仕事用 `work@gmail.com` とプライベート用 `personal@gmail.com` の2つを使いたい場合、
+> 両方のアドレスをテストユーザーに追加してください。
+> `credentials.json`（OAuth設定ファイル）は1つで全アカウント共通です。追加でダウンロードする必要はありません。
+
+### アカウントの追加手順
+
+1. アプリのGUIを起動
+2. メニューまたは設定ボタンから「**設定ダイアログ**」を開く
+3. 「**Googleアカウント**」タブをクリック
+4. 「**アカウント追加**」ボタンをクリック
+5. アカウント名を入力（例: 「仕事用」「プライベート」など。あとで一覧に表示される名前）
+6. ブラウザが自動的に開く
+7. 追加したいGoogleアカウントでログイン
+8. 「このアプリはGoogleで確認されていません」が表示された場合:
+   - 「**詳細**」→「**Calendar Wallpaper（安全ではないページ）に移動**」をクリック
+9. 「**許可**」をクリック
+10. アプリに戻ると、アカウント一覧に新しいアカウントが追加される
+
+> 2つ目以降のアカウントを追加する場合は、手順4〜10を繰り返してください。
+> 追加ごとにブラウザの認証画面が開きます。
+
+### アカウントごとの表示色を変更する
+
+壁紙上でどのアカウントの予定かを区別するため、アカウントごとに色を設定できます。
+
+1. 設定ダイアログの「Googleアカウント」タブを開く
+2. 色を変更したいアカウントをクリックして選択
+3. 「**色変更**」ボタンをクリック
+4. カラーピッカーで好きな色を選択して「OK」
+
+### アカウントの削除
+
+1. 設定ダイアログの「Googleアカウント」タブを開く
+2. 削除したいアカウントをクリックして選択
+3. 「**削除**」ボタンをクリック
+
+> 削除してもGoogleアカウント自体には影響しません。このアプリからの連携が解除されるだけです。
+
+### 仕組みの補足
+
+| 項目 | 説明 |
+| --- | --- |
+| credentials.json | OAuthクライアント設定。**全アカウント共通で1つだけ** |
+| token_{id}.json | アカウントごとの認証トークン。アカウント追加時に自動生成 |
+| accounts.json | アカウント一覧の管理ファイル（表示名・色・有効/無効） |
+| 保存場所（Python版） | `config/` ディレクトリ |
+| 保存場所（アプリ版） | `~/.calendar_wallpaper/config/` |
 
 ---
 
@@ -279,6 +576,7 @@ WALLPAPER_TARGET_DESKTOP = 1
 ```
 
 **使用例**:
+
 - メインディスプレイのみ: `WALLPAPER_TARGET_DESKTOP = 1`
 - 外部ディスプレイのみ: `WALLPAPER_TARGET_DESKTOP = 2`
 - 全ディスプレイ: `WALLPAPER_TARGET_DESKTOP = 0`
@@ -324,15 +622,24 @@ UPDATE_TIME = '06:00'
 
 ### macOS（launchd）
 
-自動起動設定スクリプトが用意されています（別チケットで実装予定）。
-
-手動設定の場合：
+手動設定の場合:
 
 1. `~/Library/LaunchAgents/`に`.plist`ファイルを作成
 2. デーモンモードで起動するように設定
 3. `launchctl load`でサービスを登録
 
-### Windows（タスクスケジューラー）
+### Windows（スタートアップ / タスクスケジューラー）
+
+#### アプリ版: スタートアップに登録（推奨）
+
+1. `Win + R` → `shell:startup` と入力して Enter
+2. 開いたフォルダに `CalendarWallpaper.exe` のショートカットを作成
+   - `CalendarWallpaper.exe` を右クリック →「ショートカットの作成」
+   - 作成したショートカットをスタートアップフォルダに移動
+
+> PC起動時に自動的にアプリが立ち上がります。
+
+#### Python版: タスクスケジューラー
 
 1. タスクスケジューラーを開く（`Win + R` → `taskschd.msc`）
 2. 「タスクの作成」をクリック
@@ -365,16 +672,44 @@ crontab -e
 
 1. `credentials.json`が`credentials/`ディレクトリに配置されているか確認
 2. ファイル名が正確に`credentials.json`であることを確認
+3. ダウンロードしたファイル名が`client_secret_XXXXX.json`のままになっていないか確認
 
 #### エラー: `The authentication token has expired`
 
 **原因**: 認証トークンの有効期限切れ
 
 **解決方法**:
+
 ```bash
 rm credentials/token.json
 python main.py --auth
 ```
+
+#### エラー: `アクセスがブロックされました`
+
+**原因**: Google Cloud ConsoleのOAuth同意画面で「テストユーザー」に自分のアドレスを追加していない
+
+**解決方法**:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → 「APIとサービス」→「OAuth同意画面」を開く
+2. 「テストユーザー」セクションを確認
+3. 自分のGmailアドレスが追加されていなければ「+ ADD USERS」で追加
+4. 再度認証を実行:
+
+```bash
+rm credentials/token.json
+python main.py --auth
+```
+
+#### エラー: `redirect_uri_mismatch`
+
+**原因**: OAuthクライアントIDの「アプリケーションの種類」が「デスクトップアプリ」以外になっている
+
+**解決方法**:
+
+1. Google Cloud Console → 「認証情報」で既存のクライアントIDを削除
+2. 新しいOAuthクライアントIDを「デスクトップアプリ」として作成し直す
+3. 新しいcredentials.jsonをダウンロードして配置し直す
 
 ### フォント関連
 
@@ -385,6 +720,7 @@ python main.py --auth
 **解決方法**:
 
 1. システムにインストールされている日本語フォントを確認:
+
    ```bash
    # macOS
    ls /System/Library/Fonts/
@@ -402,6 +738,7 @@ python main.py --auth
 **原因**: 背景画像が破損しているか、サポートされていない形式
 
 **解決方法**:
+
 1. `assets/background.jpg`が存在するか確認
 2. PNG、JPG、JPEG形式の画像を使用
 
@@ -412,16 +749,19 @@ python main.py --auth
 **解決方法**:
 
 1. **権限確認**: 壁紙変更の権限があるか確認
+
    ```bash
    # macOS: システム環境設定 → セキュリティとプライバシー
    ```
 
 2. **ログ確認**:
+
    ```bash
    tail -f calendar_app.log
    ```
 
 3. **手動実行でテスト**:
+
    ```bash
    python main.py --run-once
    ```
@@ -435,6 +775,7 @@ python main.py --auth
 **解決方法**:
 
 1. **認証スコープ確認**: 再認証を実行
+
    ```bash
    rm credentials/token.json
    python main.py --auth
@@ -443,6 +784,7 @@ python main.py --auth
 2. **カレンダーの確認**: Google Calendarで実際に予定が存在するか確認
 
 3. **ログで詳細確認**:
+
    ```bash
    python main.py --run-once --log-level DEBUG
    ```
@@ -454,6 +796,7 @@ python main.py --auth
 **原因**: PyQt6が正しくインストールされていない
 
 **解決方法**:
+
 ```bash
 pip install --upgrade PyQt6
 ```
@@ -483,6 +826,38 @@ pytest tests/test_calendar_client.py -v
 
 テスト数: 614件
 
+### アプリケーションのビルド
+
+#### macOSビルド
+
+```bash
+source venv/bin/activate
+bash scripts/build_app.sh
+```
+
+ビルド成果物: `dist/CalendarWallpaper.app`
+
+#### Windowsビルド
+
+```cmd
+venv\Scripts\activate.bat
+scripts\build_app.bat
+```
+
+ビルド成果物: `dist\CalendarWallpaper\CalendarWallpaper.exe`
+
+#### GitHub Actions（自動ビルド）
+
+タグを push すると GitHub Actions が macOS / Windows 両方を自動ビルドし、GitHub Release にアップロードします。
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+ビルド設定は `CalendarWallpaper.spec`（macOS）と `CalendarWallpaper_windows.spec`（Windows）で管理しています。
+`credentials/` はバンドルに含まれないため、ユーザーは初回起動時に自分で配置する必要があります。
+
 ### ディレクトリ構造
 
 ```text
@@ -511,11 +886,12 @@ calender_desktop/
 │   ├── themes.py                 # テーマ定義（7種）
 │   └── config.py                 # 設定ファイル
 ├── tests/                        # テストコード（614件）
-├── docs/                         # 開発ドキュメント
+├── scripts/                      # ビルドスクリプト
 ├── assets/                       # リソース（背景画像等）
 ├── credentials/                  # 認証情報（.gitignore対象）
 ├── main.py                       # CLIエントリーポイント
 ├── run_gui.py                    # GUIエントリーポイント
+├── CalendarWallpaper.spec        # PyInstallerビルド設定
 ├── requirements.txt              # 依存パッケージ
 ├── README.md                     # プロジェクト概要
 └── USER_GUIDE.md                 # このファイル
@@ -553,7 +929,7 @@ UI (PyQt6)  ->  ViewModel  ->  WallpaperService  ->  ImageGenerator / CalendarCl
 
 ### Q: 複数のGoogleアカウントで使用できますか？
 
-A: 対応しています。GUI設定ダイアログの「アカウント管理」セクションから複数のGoogleアカウントを追加し、カレンダーごとに表示色を設定できます。
+A: 対応しています。詳しい手順は [複数Googleアカウントの設定](#複数googleアカウントの設定) を参照してください。事前にGoogle Cloud Consoleで全アカウントをテストユーザーに追加する必要がある点にご注意ください。
 
 ### Q: 壁紙の解像度を変更したい
 
@@ -569,7 +945,15 @@ A: デーモンモードを使用せず、ワンショットモード（`--run-o
 
 ### Q: テーマをカスタマイズしたい
 
-A: `src/themes.py`に新しいテーマを追加できます。詳細は開発ドキュメントを参照してください。
+A: `src/themes.py`に新しいテーマを追加できます。既存テーマの辞書構造をコピーして、色やスタイルの値を変更してください。
+
+### Q: Google Cloud Consoleの設定が難しい
+
+A: [Google Calendar API設定](#google-calendar-api設定全員必須)セクションの手順に沿って進めてください。特にステップ4（OAuth同意画面）のテストユーザー追加を忘れやすいのでご注意ください。
+
+### Q: アプリ版とPython版の違いは？
+
+A: 機能は同じです。アプリ版はPythonのインストールが不要で、ダブルクリックで起動できます。Python版はソースコードを直接編集してカスタマイズできます。
 
 ---
 

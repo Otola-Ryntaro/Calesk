@@ -16,6 +16,7 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 - **7種類のテーマ**: simple, modern, pastel, dark, vibrant, luxury, playful
 - **週間カレンダー表示**: 今日と1週間の予定を見やすく表示
 - **カスタム背景**: 背景画像のアップロードまたはグラデーション背景に対応
+- **macOS / Windows対応**: ビルド済みバイナリで即利用可能（GitHub Actions自動ビルド）
 - **マルチディスプレイ対応**: 解像度自動検出、複数モニター環境で柔軟に設定可能
 - **GUI/CLI両対応**: 設定ダイアログ付きGUIとコマンドライン操作
 - **自動更新**: 常駐アプリとして定期的に壁紙を自動更新
@@ -23,13 +24,20 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 
 ## クイックスタート
 
-### 必要要件
+### かんたんインストール（Python不要）
 
-- Python 3.13以上
-- macOS / Linux / Windows
-- Google Calendar アカウント
+[Releases](../../releases) ページからダウンロードしてすぐに使えます。
 
-### インストール
+| OS | ダウンロードファイル | 起動方法 |
+| --- | --- | --- |
+| macOS | `CalendarWallpaper-macOS.zip` | 展開 → 右クリック →「開く」 |
+| Windows | `CalendarWallpaper-Windows.zip` | 展開 → `CalendarWallpaper.exe` をダブルクリック |
+
+> 詳細は [USER_GUIDE.md](USER_GUIDE.md) を参照してください。
+
+### 開発者向けインストール（Python環境）
+
+**必要要件**: Python 3.13以上 / macOS・Linux・Windows / Googleアカウント
 
 ```bash
 # リポジトリのクローン
@@ -44,12 +52,15 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Google Calendar API設定
+### Google Calendar API設定（全員必須）
 
 1. [Google Cloud Console](https://console.cloud.google.com/)でプロジェクトを作成
 2. Google Calendar APIを有効化
-3. OAuth 2.0クライアントIDを作成（デスクトップアプリケーション）
-4. `credentials.json`をダウンロードして`credentials/`ディレクトリに配置
+3. OAuth同意画面を設定し、テストユーザーに自分のGmailアドレスを追加
+4. OAuthクライアントID（デスクトップアプリ）を作成
+5. `credentials.json`をダウンロードして`credentials/`ディレクトリに配置
+
+> 初めての方向けに、画面ごとの詳細な手順を [USER_GUIDE.md](USER_GUIDE.md#google-calendar-api設定全員必須) に記載しています。
 
 ### 初回認証
 

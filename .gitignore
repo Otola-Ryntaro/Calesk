@@ -63,7 +63,7 @@ htmlcov/
 /tmp/
 
 # Build artifacts (PyInstaller)
-*.spec
+# Note: *.spec files are tracked (needed for build)
 
 # Claude Code / AI tool settings
 .claude/
@@ -85,3 +85,9 @@ Screenshots/
 
 # Local config overrides
 config/
+
+# Internal development docs (tickets, architecture notes)
+docs/
+
+# private setting files
+フロントエンド改善導入ガイド.md
