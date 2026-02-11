@@ -27,6 +27,7 @@ class CalendarClient:
         self.service = None
         self.creds = None
         self.accounts = {}  # {account_id: {'service': service, 'email': str, 'color': str, 'display_name': str}}
+        self._expired_accounts = {}  # {account_id: {'email': str, ...}} トークン期限切れアカウント
 
     @property
     def is_authenticated(self) -> bool:
@@ -424,14 +425,22 @@ class CalendarClient:
             calendar_list = service.calendarList().list().execute()
 
             # プライマリカレンダーからメールアドレスを取得
+            # primary=Trueのカレンダーのidがメールアドレス
             email = None
             for cal in calendar_list.get('items', []):
-                if cal.get('id') == 'primary':
-                    email = cal.get('summary', 'unknown@gmail.com')
+                if cal.get('primary'):
+                    email = cal.get('id', 'unknown@gmail.com')
                     break
 
             if not email:
                 email = 'unknown@gmail.com'
+
+            # 重複チェック: 同じメールアドレスが既に登録されていないか
+            config = self._load_accounts_config()
+            existing_emails = [a['email'] for a in config.get('accounts', [])]
+            if email in existing_emails:
+                logger.warning(f"アカウント {email} は既に登録されています")
+                return None
 
             # 3. 一意のaccount_idを生成
             account_id = self._generate_account_id()
@@ -606,6 +615,7 @@ class CalendarClient:
         """
         config = self._load_accounts_config()
         self.accounts = {}
+        self._expired_accounts = {}
 
         for account in config.get('accounts', []):
             if not account.get('enabled', False):
@@ -644,6 +654,12 @@ class CalendarClient:
                         os.chmod(token_path, 0o600)
                     else:
                         logger.warning(f"アカウント {account_id} のトークンが無効です")
+                        # 期限切れアカウントとして記録
+                        self._expired_accounts[account_id] = {
+                            'email': account.get('email', ''),
+                            'color': account.get('color', '#4285f4'),
+                            'display_name': account.get('display_name', account.get('email', ''))
+                        }
                         continue
 
                 # サービスを構築
@@ -662,6 +678,15 @@ class CalendarClient:
             except Exception as e:
                 logger.error(f"アカウント {account_id} の読み込みエラー: {e}")
                 continue
+
+    def get_expired_account_ids(self) -> List[str]:
+        """
+        トークンが無効なアカウントIDのリストを返す
+
+        Returns:
+            List[str]: 期限切れアカウントIDのリスト
+        """
+        return list(self._expired_accounts.keys())
 
     def get_all_events(self, days: int = 1) -> List[CalendarEvent]:
         """

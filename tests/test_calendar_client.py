@@ -1017,7 +1017,7 @@ class TestAccountsConfiguration:
         # Mock service
         mock_service = MagicMock()
         mock_service.calendarList().list().execute.return_value = {
-            'items': [{'id': 'primary', 'summary': 'user@gmail.com'}]
+            'items': [{'id': 'user@gmail.com', 'summary': 'user@gmail.com', 'primary': True}]
         }
         mock_build.return_value = mock_service
 
