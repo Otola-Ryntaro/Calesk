@@ -69,6 +69,7 @@ htmlcov/
 .claude/
 CLAUDE.md
 Codex/
+[Codex]/
 
 # Personal notes / reports
 memo.md
