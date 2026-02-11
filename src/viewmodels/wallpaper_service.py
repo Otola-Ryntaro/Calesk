@@ -12,6 +12,7 @@ import logging
 from ..calendar_client import CalendarClient
 from ..image_generator import ImageGenerator
 from ..wallpaper_setter import WallpaperSetter
+from ..wallpaper_cache import WallpaperCache
 from .. import themes
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ class WallpaperService:
         self.calendar_client = CalendarClient()
         self.image_generator = ImageGenerator()
         self.wallpaper_setter = WallpaperSetter()
+        self.wallpaper_cache = WallpaperCache()
         logger.info("WallpaperServiceを初期化しました")
 
     def generate_wallpaper(
@@ -70,6 +72,13 @@ class WallpaperService:
                 raise Exception("壁紙画像の生成に失敗しました")
 
             logger.info(f"壁紙生成完了: {image_path}")
+
+            # キャッシュに保存
+            self.wallpaper_cache.save_cache(
+                wallpaper_path=image_path,
+                theme=theme_name
+            )
+
             return image_path
 
         except Exception as e:
@@ -141,6 +150,29 @@ class WallpaperService:
         """背景画像をデフォルトに戻す"""
         self.image_generator.reset_background_image()
         logger.info("背景画像をデフォルトに戻しました")
+
+    def get_cached_wallpaper(self) -> Optional[Path]:
+        """
+        キャッシュされた壁紙パスを取得
+
+        Returns:
+            Optional[Path]: キャッシュ壁紙のパス。存在しない場合はNone。
+        """
+        return self.wallpaper_cache.load_cache()
+
+    def set_cached_wallpaper(self) -> bool:
+        """
+        キャッシュ壁紙をデスクトップに設定
+
+        Returns:
+            bool: 設定成功でTrue
+        """
+        cached = self.wallpaper_cache.load_cache()
+        if cached:
+            logger.info(f"キャッシュ壁紙を使用します: {cached}")
+            return self.set_wallpaper(cached)
+        logger.warning("キャッシュ壁紙が見つかりません")
+        return False
 
     def get_available_themes(self) -> List[str]:
         """

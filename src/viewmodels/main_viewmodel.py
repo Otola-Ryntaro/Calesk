@@ -235,8 +235,9 @@ class MainViewModel(ViewModelBase):
         self.error_occurred.emit(error_message)
         logger.error(f"ワーカーエラー: {error_message}")
 
-        # 認証エラーの場合、自動更新を停止
+        # 認証エラーの場合、キャッシュ壁紙にフォールバック＆自動更新停止
         if self._is_auth_error(error_message):
+            self._fallback_to_cache()
             if self.is_auto_updating:
                 self.stop_auto_update()
                 logger.warning(f"認証エラーにより自動更新を停止しました: {error_message}")
@@ -245,6 +246,18 @@ class MainViewModel(ViewModelBase):
         """エラーメッセージが認証エラーかどうかを判定"""
         lower_msg = error_message.lower()
         return any(keyword in lower_msg for keyword in self._auth_error_keywords)
+
+    def _fallback_to_cache(self):
+        """キャッシュ壁紙にフォールバック"""
+        cached = self._wallpaper_service.get_cached_wallpaper()
+        if cached:
+            result = self._wallpaper_service.set_wallpaper(cached)
+            if result:
+                logger.info(f"キャッシュ壁紙にフォールバックしました: {cached}")
+            else:
+                logger.warning("キャッシュ壁紙の設定に失敗しました")
+        else:
+            logger.warning("キャッシュ壁紙が見つかりません")
 
     def _on_worker_result(self, success: bool):
         """ワーカー結果時の処理"""
