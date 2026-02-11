@@ -48,17 +48,29 @@
 | 生成後 | ~11 MB | ~0.5 MB |
 
 ## タスク
+
+### Phase 1（完了）
 - [x] フォントの遅延ロード・使用後解放を実装
 - [x] 背景画像キャッシュ機構を実装
-- [ ] アイコン画像の初回読み込みキャッシュを実装
-- [x] PIL Imageの明示的close()を壁紙生成フローに追加
 - [x] RGBA→RGB変換の効率化
 - [x] 壁紙生成後のリソース解放メソッドを追加
+
+### Phase 2（完了）
+- [x] アイコン画像の初回読み込みキャッシュを実装
+- [x] PIL Imageの明示的close()をRenderer全Mixinに追加
+  - effects.py: _draw_glass_card（4つの中間Image解放）、_draw_current_time_arrow
+  - calendar_renderer.py: _draw_hour_label、_draw_calendar_background、_draw_week_calendar
+  - card_renderer.py: _draw_event_cards
+- [x] generate_wallpaper()の最終image.close()追加
+- [x] release_resources()にgc.collect()追加
+- [x] 既存テストの通過を確認（614 passed）
+
+### 未実施（将来）
 - [ ] メモリ消費計測テストを追加（psutil利用）
-- [x] 既存テストの通過を確認（608 passed, 1 flaky）
+- [ ] CalendarClient APIサービスの遅延解放
 
 ## テスト方針
-- 各最適化の前後でメモリ消費を計測
 - 遅延ロードの正常動作テスト（フォントが必要時に読み込まれること）
 - リソース解放後の再生成テスト
-- 既存の584テストが全て通ること
+- gc.collect()呼び出し確認、アイコンキャッシュ動作確認
+- 全テーマ x 複数サイクルの回帰テスト

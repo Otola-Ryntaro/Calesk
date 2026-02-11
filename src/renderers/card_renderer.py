@@ -297,6 +297,8 @@ class CardRendererMixin:
                 fill=header_bg
             )
             image.alpha_composite(overlay)
+            del overlay_draw
+            overlay.close()
             draw = ImageDraw.Draw(image)
 
         for col_idx, (day_key, label) in enumerate(column_labels):

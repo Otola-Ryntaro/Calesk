@@ -7,6 +7,7 @@
 - CardRendererMixin: イベントカード描画（Zen/Hero/Compact/Single）
 - CalendarRendererMixin: 週間カレンダー、時刻ラベル、イベント配置
 """
+import gc
 import platform
 from collections import ChainMap
 from datetime import datetime, timedelta
@@ -89,6 +90,9 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
         # 背景画像キャッシュ
         self._cached_background = None
         self._cached_background_path = None
+
+        # アイコン画像キャッシュ
+        self._cached_icon = None
 
         # レイアウト計算（動的）
         self.layout = self._calculate_layout()
@@ -177,7 +181,7 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
 
     def release_resources(self):
         """
-        メモリ上のリソースを解放（フォントキャッシュ、背景画像キャッシュ）
+        メモリ上のリソースを解放（フォント・背景画像・アイコンキャッシュ）
         バックグラウンド待機時のメモリ消費を削減
         """
         self._font_cache = {}
@@ -185,7 +189,11 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             self._cached_background.close()
         self._cached_background = None
         self._cached_background_path = None
-        logger.debug("ImageGeneratorリソースを解放しました")
+        if self._cached_icon:
+            self._cached_icon.close()
+        self._cached_icon = None
+        gc.collect()
+        logger.debug("ImageGeneratorリソースを解放しました（GC実行）")
 
     def set_theme(self, theme_name: str):
         """
@@ -245,25 +253,23 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             draw: ImageDrawオブジェクト
         """
         try:
-            # アイコン画像を読み込み
             if CALENDAR_ICON_PATH and Path(CALENDAR_ICON_PATH).exists():
-                icon_img = Image.open(CALENDAR_ICON_PATH)
+                # キャッシュがない場合のみ読み込み
+                if self._cached_icon is None:
+                    icon_img = Image.open(CALENDAR_ICON_PATH)
+                    icon_size = self._get_icon_size()
+                    if icon_img.size != icon_size:
+                        resized = icon_img.resize(icon_size, Image.Resampling.LANCZOS)
+                        icon_img.close()
+                        icon_img = resized
+                    self._cached_icon = icon_img
 
-                # サイズ調整（必要に応じて）
-                icon_size = self._get_icon_size()
-                if icon_img.size != icon_size:
-                    icon_img = icon_img.resize(icon_size, Image.Resampling.LANCZOS)
-
-                # 配置位置を取得
                 x, y = self._get_icon_position()
 
-                # アイコンを貼り付け（透過対応）
-                if icon_img.mode == 'RGBA':
-                    # 透過画像の場合
-                    image.paste(icon_img, (x, y), icon_img)
+                if self._cached_icon.mode == 'RGBA':
+                    image.paste(self._cached_icon, (x, y), self._cached_icon)
                 else:
-                    # 不透明画像の場合
-                    image.paste(icon_img, (x, y))
+                    image.paste(self._cached_icon, (x, y))
 
                 logger.debug(f"アイコンを配置しました: ({x}, {y})")
             else:
@@ -353,6 +359,7 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             )
             output_path = OUTPUT_DIR / filename
             image.save(output_path)
+            image.close()  # 保存後は不要なので即座に解放
 
             logger.info(f"壁紙画像を生成しました: {output_path}")
             return output_path

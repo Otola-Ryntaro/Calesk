@@ -177,10 +177,13 @@ class EffectsRendererMixin:
         # カード領域をクロップしてぼかし
         card_region = image.crop((x1, y1, x2, y2))
         blurred = card_region.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+        card_region.close()
 
         # 半透明着色レイヤーを重ねる
         tint_layer = Image.new('RGBA', blurred.size, glass_tint)
-        blurred = Image.alpha_composite(blurred, tint_layer)
+        composited = Image.alpha_composite(blurred, tint_layer)
+        blurred.close()
+        tint_layer.close()
 
         # 角丸マスクを作成
         if radius > 0:
@@ -191,9 +194,12 @@ class EffectsRendererMixin:
                 radius=radius,
                 fill=255
             )
-            image.paste(blurred, (x1, y1), mask)
+            image.paste(composited, (x1, y1), mask)
+            del mask_draw
+            mask.close()
         else:
-            image.paste(blurred, (x1, y1))
+            image.paste(composited, (x1, y1))
+        composited.close()
 
         # 枠線（半透明白）
         border_color = self.theme.get('glass_border_color', (255, 255, 255, 77))
@@ -407,6 +413,8 @@ class EffectsRendererMixin:
                 fill=highlight_color
             )
             image.alpha_composite(overlay)
+            del overlay_draw
+            overlay.close()
             draw = ImageDraw.Draw(image)
 
     def _create_gradient_background(

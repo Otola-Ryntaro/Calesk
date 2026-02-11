@@ -68,6 +68,8 @@ class CalendarRendererMixin:
                     fill=label_bg
                 )
             image.alpha_composite(overlay, dest=(bg_rect[0], bg_rect[1]))
+            del overlay_draw
+            overlay.close()
 
             # テキスト描画（合成後のdrawを更新）
             draw = ImageDraw.Draw(image)
@@ -134,6 +136,8 @@ class CalendarRendererMixin:
             fill=label_bg
         )
         image.alpha_composite(overlay)
+        del overlay_draw
+        overlay.close()
 
     def _get_multi_day_events(
         self,
@@ -273,6 +277,8 @@ class CalendarRendererMixin:
                 fill=header_bg
             )
             image.alpha_composite(overlay)
+            del overlay_draw
+            overlay.close()
             draw = ImageDraw.Draw(image)
 
         for i in range(7):

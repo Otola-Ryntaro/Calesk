@@ -1,9 +1,11 @@
 """
 チケット024: メモリ消費削減テスト
-フォント遅延ロード、リソース解放、背景画像キャッシュ
+Phase 1: フォント遅延ロード、リソース解放、背景画像キャッシュ
+Phase 2: 中間Image即時解放、アイコンキャッシュ、gc.collect()
 """
+import gc
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from pathlib import Path
 from PIL import Image
 
@@ -115,3 +117,65 @@ class TestGenerateWallpaperMemory:
             # 2回目の生成
             output2 = gen.generate_wallpaper([], [])
             assert output2 is not None
+
+
+# ============================================================
+# Phase 2: 中間Image即時解放、アイコンキャッシュ、gc.collect()
+# ============================================================
+
+class TestGcCollectOnRelease:
+    """gc.collect()がrelease_resources()で呼ばれること"""
+
+    def test_gc_collect_called(self):
+        """release_resources()でgc.collect()が呼ばれること"""
+        from src.image_generator import ImageGenerator
+        with patch('src.image_generator.THEME', 'simple'):
+            gen = ImageGenerator()
+            with patch('src.image_generator.gc.collect') as mock_gc:
+                gen.release_resources()
+                mock_gc.assert_called_once()
+
+
+class TestIconCache:
+    """アイコンキャッシュテスト"""
+
+    def test_icon_cache_attribute_exists(self):
+        """_cached_icon属性が存在すること"""
+        from src.image_generator import ImageGenerator
+        with patch('src.image_generator.THEME', 'simple'):
+            gen = ImageGenerator()
+            assert hasattr(gen, '_cached_icon')
+            assert gen._cached_icon is None
+
+    def test_icon_cache_cleared_on_release(self):
+        """release_resources()でアイコンキャッシュが解放されること"""
+        from src.image_generator import ImageGenerator
+        with patch('src.image_generator.THEME', 'simple'):
+            gen = ImageGenerator()
+            gen._cached_icon = Image.new('RGBA', (40, 40))
+            gen.release_resources()
+            assert gen._cached_icon is None
+
+
+class TestPhase2GenerateWallpaper:
+    """Phase 2最適化後の壁紙生成テスト"""
+
+    def test_all_themes_still_work(self):
+        """Phase 2最適化後も全テーマで壁紙生成が正常動作すること"""
+        from src.image_generator import ImageGenerator
+        for theme in ['simple', 'modern', 'pastel', 'dark', 'vibrant', 'luxury', 'playful']:
+            with patch('src.image_generator.THEME', theme):
+                gen = ImageGenerator()
+                output = gen.generate_wallpaper([], [])
+                assert output is not None, f"{theme}テーマで壁紙生成に失敗"
+                assert output.exists()
+
+    def test_multiple_generate_cycles(self):
+        """生成→解放を3回繰り返しても正常動作すること"""
+        from src.image_generator import ImageGenerator
+        with patch('src.image_generator.THEME', 'modern'):
+            gen = ImageGenerator()
+            for i in range(3):
+                output = gen.generate_wallpaper([], [])
+                assert output is not None, f"{i+1}回目の壁紙生成に失敗"
+                gen.release_resources()
