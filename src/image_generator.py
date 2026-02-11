@@ -70,9 +70,13 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
         'font_day_header_bold': (FONT_SIZE_DAY_HEADER, True),
     }
 
+    # クロップ位置の定義
+    CROP_POSITIONS = ['center', 'top', 'bottom']
+
     def __init__(self):
         self.system = platform.system()
         self._custom_background_path = None
+        self._crop_position = 'center'
 
         # 解像度の自動検出
         if AUTO_DETECT_RESOLUTION and WALLPAPER_TARGET_DESKTOP > 0:
@@ -221,6 +225,53 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
         self._custom_background_path = None
         logger.info("背景画像をデフォルトに戻しました")
 
+    @property
+    def crop_position(self):
+        """クロップ位置を取得"""
+        return self._crop_position
+
+    def set_crop_position(self, position: str):
+        """クロップ位置を設定（center/top/bottom）"""
+        if position in self.CROP_POSITIONS:
+            self._crop_position = position
+            # クロップ位置変更時はキャッシュをクリア
+            if self._cached_background:
+                self._cached_background.close()
+            self._cached_background = None
+            self._cached_background_path = None
+            logger.info(f"クロップ位置を '{position}' に設定しました")
+
+    def _resize_cover(self, img: Image.Image, crop_position: str = None) -> Image.Image:
+        """アスペクト比を維持したままスクリーンを覆うリサイズ+クロップ
+
+        余白なし・はみ出し部分をクロップ（CSS background-size: cover相当）
+        """
+        position = crop_position or self._crop_position
+        src_w, src_h = img.size
+        target_w, target_h = self.width, self.height
+
+        # スケール計算: 大きい方の比率を採用（画面を完全に覆う）
+        scale = max(target_w / src_w, target_h / src_h)
+        new_w = max(target_w, int(src_w * scale + 0.5))
+        new_h = max(target_h, int(src_h * scale + 0.5))
+
+        resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        # クロップ位置を計算
+        # 横方向は常に中央
+        left = (new_w - target_w) // 2
+        # 縦方向はcrop_positionに従う
+        if position == 'top':
+            top = 0
+        elif position == 'bottom':
+            top = new_h - target_h
+        else:  # center
+            top = (new_h - target_h) // 2
+
+        cropped = resized.crop((left, top, left + target_w, top + target_h))
+        resized.close()
+        return cropped
+
     def _get_icon_position(self) -> Tuple[int, int]:
         """
         OS別のアイコン配置座標を取得（動的解像度対応）
@@ -313,12 +364,13 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
                         image = self._cached_background.copy()
                     else:
                         logger.info(f"背景画像を読み込んでいます: {bg_path}")
-                        background = Image.open(bg_path)
-                        background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                        raw = Image.open(bg_path)
+                        background = self._resize_cover(raw)
+                        raw.close()
                         if background.mode != 'RGBA':
-                            resized = background.convert('RGBA')
+                            converted = background.convert('RGBA')
                             background.close()
-                            background = resized
+                            background = converted
                         # キャッシュに保存
                         self._cached_background = background
                         self._cached_background_path = str(bg_path)

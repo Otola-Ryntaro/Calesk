@@ -448,6 +448,11 @@ class MainViewModel(ViewModelBase):
         self.set_preset_background(DEFAULT_PRESET_BACKGROUND)
         logger.info("背景画像をデフォルトプリセットに戻しました")
 
+    def set_crop_position(self, position: str):
+        """背景画像のクロップ位置を設定"""
+        self._wallpaper_service.set_crop_position(position)
+        logger.info(f"クロップ位置を '{position}' に設定しました")
+
     # === 自動更新機能 ===
 
     @property

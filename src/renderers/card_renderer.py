@@ -251,18 +251,7 @@ class CardRendererMixin:
         """今日・明日・明後日の予定を動的レイアウトで描画"""
         now = datetime.now()
 
-        # 今日のイベント数でレイアウトモードを決定
-        today_count = len(today_events)
-        mode = self._select_layout_mode(today_count)
-
-        if mode == 'zen':
-            self._draw_zen_mode(draw, y_start, image)
-            return
-        elif mode == 'hero':
-            self._draw_hero_mode(draw, today_events[0], y_start, image)
-            return
-
-        # week_events がある場合は3日分に振り分け
+        # 先に3日分に振り分け（レイアウト判定に必要）
         if week_events:
             days = self._get_events_for_days(week_events)
         else:
@@ -271,6 +260,22 @@ class CardRendererMixin:
                 'tomorrow': [],
                 'day_after': []
             }
+
+        today_count = len(days['today'])
+        has_future_events = len(days['tomorrow']) > 0 or len(days['day_after']) > 0
+
+        # 明日・明後日に予定がある場合は常に3列レイアウト
+        if has_future_events:
+            mode = 'card' if today_count <= 3 else 'compact'
+        else:
+            mode = self._select_layout_mode(today_count)
+
+        if mode == 'zen':
+            self._draw_zen_mode(draw, y_start, image)
+            return
+        elif mode == 'hero':
+            self._draw_hero_mode(draw, days['today'][0], y_start, image)
+            return
 
         column_labels = [
             ('today', '今日の予定'),

@@ -12,6 +12,7 @@ from ..config import (
     THEME, AUTO_UPDATE_INTERVAL_MINUTES, AUTO_UPDATE_ENABLED_DEFAULT,
     AUTO_DETECT_RESOLUTION, WALLPAPER_TARGET_DESKTOP,
     CARD_SHADOW_ENABLED, DEFAULT_PRESET_BACKGROUND,
+    BACKGROUND_CROP_POSITION,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class SettingsService:
         "auto_detect_resolution": AUTO_DETECT_RESOLUTION,
         "wallpaper_target_desktop": WALLPAPER_TARGET_DESKTOP,
         "card_shadow_enabled": CARD_SHADOW_ENABLED,
+        "background_crop_position": BACKGROUND_CROP_POSITION,
     }
 
     # 設定値の型スキーマ
@@ -43,6 +45,7 @@ class SettingsService:
         "auto_detect_resolution": bool,
         "wallpaper_target_desktop": int,
         "card_shadow_enabled": bool,
+        "background_crop_position": str,
     }
 
     def __init__(self, settings_dir: Optional[Path] = None):

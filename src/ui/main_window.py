@@ -141,6 +141,18 @@ class MainWindow(QMainWindow):
         self.bg_combo.currentIndexChanged.connect(self._on_background_combo_changed)
         bg_layout.addWidget(self.bg_combo)
 
+        # クロップ位置選択
+        crop_label = QLabel("位置:")
+        bg_layout.addWidget(crop_label)
+
+        self.crop_combo = QComboBox()
+        self.crop_combo.setObjectName("crop_combo")
+        self.crop_combo.addItem("中央", "center")
+        self.crop_combo.addItem("上寄せ", "top")
+        self.crop_combo.addItem("下寄せ", "bottom")
+        self.crop_combo.currentIndexChanged.connect(self._on_crop_position_changed)
+        bg_layout.addWidget(self.crop_combo)
+
         bg_layout.addStretch()
 
         # 「カスタム画像を選択」ボタン
@@ -298,6 +310,16 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"背景画像: {self.bg_combo.itemText(index)}")
             self.viewmodel.preview_theme(self.viewmodel.current_theme)
 
+    def _on_crop_position_changed(self, index: int):
+        """クロップ位置の変更"""
+        if index < 0:
+            return
+        position = self.crop_combo.itemData(index)
+        self.viewmodel.set_crop_position(position)
+        self.settings_service.set("background_crop_position", position)
+        self.settings_service.save()
+        self.viewmodel.preview_theme(self.viewmodel.current_theme)
+
     @pyqtSlot()
     def _on_select_background(self):
         """カスタム背景画像を選択するファイルダイアログを表示"""
@@ -344,6 +366,17 @@ class MainWindow(QMainWindow):
 
     def _restore_background_setting(self):
         """起動時に背景画像設定を復元"""
+        # クロップ位置を復元
+        crop_pos = self.settings_service.get("background_crop_position", "center")
+        for i in range(self.crop_combo.count()):
+            if self.crop_combo.itemData(i) == crop_pos:
+                self.crop_combo.blockSignals(True)
+                self.crop_combo.setCurrentIndex(i)
+                self.crop_combo.blockSignals(False)
+                self.viewmodel.set_crop_position(crop_pos)
+                break
+
+        # 背景画像を復元
         bg_value = self.settings_service.get("background_image_path", "")
         if not bg_value:
             return

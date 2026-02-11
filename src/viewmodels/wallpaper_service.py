@@ -154,6 +154,11 @@ class WallpaperService:
         self.image_generator.reset_background_image()
         logger.info("背景画像をデフォルトに戻しました")
 
+    def set_crop_position(self, position: str):
+        """背景画像のクロップ位置を設定"""
+        self.image_generator.set_crop_position(position)
+        logger.info(f"クロップ位置を '{position}' に設定しました")
+
     def get_cached_wallpaper(self) -> Optional[Path]:
         """
         キャッシュされた壁紙パスを取得

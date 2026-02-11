@@ -211,10 +211,20 @@ PRESET_BACKGROUNDS = [
     {"name": "青空", "file": "sky.png"},
     {"name": "ビーチ", "file": "beach.png"},
     {"name": "夕焼け", "file": "sunset.png"},
+    {"name": "日本列島", "file": "japan.png"},
+    {"name": "オーロラ", "file": "aurora.png"},
+    {"name": "地球", "file": "earth.png"},
+    {"name": "砂浜の夕日", "file": "beach_sunset.png"},
 ]
 DEFAULT_PRESET_BACKGROUND = "sky.png"
 BACKGROUNDS_DIR = BASE_DIR / 'backgrounds'
 BACKGROUND_IMAGE_PATH = BACKGROUNDS_DIR / DEFAULT_PRESET_BACKGROUND
+
+# 背景画像クロップ位置（center/top/bottom）
+# center: 中央クロップ（デフォルト）
+# top: 上寄せクロップ（空・風景向き）
+# bottom: 下寄せクロップ（地面・水面向き）
+BACKGROUND_CROP_POSITION = 'center'
 
 # === 自動更新設定 ===
 AUTO_UPDATE_INTERVAL_MINUTES = 60  # 自動更新間隔（分）
