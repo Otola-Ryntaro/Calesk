@@ -139,10 +139,13 @@ class CalendarClient:
             return []
 
         try:
-            # 時刻範囲の設定
-            now = datetime.now(timezone.utc)
-            time_min = now.isoformat()  # タイムゾーン情報が自動的に付加される
-            time_max = (now + timedelta(days=days)).isoformat()
+            # 時刻範囲の設定（今日の00:00から起算し、当日分の全イベントを含める）
+            local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+            today_start = datetime.combine(
+                datetime.now().date(), datetime.min.time(), tzinfo=local_tz
+            )
+            time_min = today_start.isoformat()
+            time_max = (today_start + timedelta(days=days)).isoformat()
 
             all_events = []
 

@@ -292,16 +292,19 @@ class CardRendererMixin:
         # 列ヘッダー領域に半透明背景を描画
         header_bg = self.theme.get('header_bg')
         if image is not None and header_bg:
-            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-            overlay_draw = ImageDraw.Draw(overlay)
             pad = 6
+            region_x = start_x - pad
+            region_y = y_start - pad
+            region_w = total_width + pad * 2
+            region_h = COLUMN_HEADER_HEIGHT + pad
+            overlay = Image.new('RGBA', (region_w, region_h), (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
             overlay_draw.rounded_rectangle(
-                [(start_x - pad, y_start - pad),
-                 (start_x + total_width + pad, y_start + COLUMN_HEADER_HEIGHT)],
+                [(0, 0), (region_w - 1, region_h - 1)],
                 radius=self.theme.get('card_radius', 0),
                 fill=header_bg
             )
-            image.alpha_composite(overlay)
+            image.alpha_composite(overlay, dest=(region_x, region_y))
             del overlay_draw
             overlay.close()
             draw = ImageDraw.Draw(image)

@@ -128,15 +128,12 @@ class CalendarRendererMixin:
         margin_left = 55
         pad = 5
 
-        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
-        overlay_draw.rectangle(
-            (start_x - margin_left - pad, y_start - pad,
-             start_x + total_width + pad, y_start + total_height + pad),
-            fill=label_bg
-        )
-        image.alpha_composite(overlay)
-        del overlay_draw
+        region_x = start_x - margin_left - pad
+        region_y = y_start - pad
+        region_w = (start_x + total_width + pad) - region_x
+        region_h = (y_start + total_height + pad) - region_y
+        overlay = Image.new('RGBA', (region_w, region_h), label_bg)
+        image.alpha_composite(overlay, dest=(region_x, region_y))
         overlay.close()
 
     def _get_multi_day_events(
@@ -267,16 +264,19 @@ class CalendarRendererMixin:
         header_bg = self.theme.get('header_bg')
         if image is not None and header_bg:
             header_height_px = self.layout['header_height']
-            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-            overlay_draw = ImageDraw.Draw(overlay)
             pad = 4
+            region_x = start_x - pad
+            region_y = y_start - pad
+            region_w = total_width + pad * 2
+            region_h = header_height_px + pad * 2
+            overlay = Image.new('RGBA', (region_w, region_h), (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
             overlay_draw.rounded_rectangle(
-                [(start_x - pad, y_start - pad),
-                 (start_x + total_width + pad, y_start + header_height_px + pad)],
+                [(0, 0), (region_w - 1, region_h - 1)],
                 radius=self.theme.get('card_radius', 0),
                 fill=header_bg
             )
-            image.alpha_composite(overlay)
+            image.alpha_composite(overlay, dest=(region_x, region_y))
             del overlay_draw
             overlay.close()
             draw = ImageDraw.Draw(image)

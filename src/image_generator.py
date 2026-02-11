@@ -185,10 +185,10 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
 
     def release_resources(self):
         """
-        メモリ上のリソースを解放（フォント・背景画像・アイコンキャッシュ）
+        メモリ上のリソースを解放（背景画像・アイコンキャッシュ）
         バックグラウンド待機時のメモリ消費を削減
+        フォントキャッシュは再生成コストが高いため保持する
         """
-        self._font_cache = {}
         if self._cached_background:
             self._cached_background.close()
         self._cached_background = None
@@ -399,7 +399,7 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             # RGBAからRGBに変換（PNG保存用）
             if image.mode == 'RGBA':
                 rgb_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
-                rgb_image.paste(image, mask=image.split()[3])
+                rgb_image.paste(image, mask=image.getchannel('A'))
                 image.close()  # RGBA画像を明示的に解放
                 image = rgb_image
 

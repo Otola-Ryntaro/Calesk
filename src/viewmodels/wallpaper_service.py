@@ -5,6 +5,7 @@ ViewModelとcore/を橋渡しするService層。
 壁紙の生成と設定を担当します。
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
 import logging
@@ -57,9 +58,13 @@ class WallpaperService:
             if not self.calendar_client.authenticate():
                 raise Exception("Google Calendar API認証に失敗しました")
 
-            # イベント取得
-            today_events = self.calendar_client.get_today_events()
+            # イベント取得（1回のAPI呼び出しで今週分を取得し、今日分をフィルタ）
             week_events = self.calendar_client.get_week_events()
+            today = datetime.now().date()
+            today_events = [
+                e for e in week_events
+                if e.start_datetime.date() <= today <= e.end_datetime.date()
+            ]
             logger.info(f"今日の予定: {len(today_events)}件、今週の予定: {len(week_events)}件")
 
             # テーマの設定

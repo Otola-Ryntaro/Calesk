@@ -28,14 +28,23 @@ class TestWallpaperService:
     @patch('src.viewmodels.wallpaper_service.CalendarClient')
     @patch('src.viewmodels.wallpaper_service.ImageGenerator')
     def test_generate_wallpaper(self, mock_image_generator, mock_calendar_client):
-        """壁紙生成が正しく動作することを確認"""
+        """壁紙生成が正しく動作することを確認（API1回呼び出し）"""
+        from datetime import datetime, timedelta
         from src.viewmodels.wallpaper_service import WallpaperService
 
-        # モックの設定（CalendarClient）
+        # 今日と明日のイベントをMockオブジェクトで作成
+        today = datetime.now().date()
+        today_event = Mock()
+        today_event.start_datetime = datetime.combine(today, datetime.min.time().replace(hour=10))
+        today_event.end_datetime = datetime.combine(today, datetime.min.time().replace(hour=11))
+
+        week_event = Mock()
+        week_event.start_datetime = datetime.combine(today + timedelta(days=2), datetime.min.time().replace(hour=14))
+        week_event.end_datetime = datetime.combine(today + timedelta(days=2), datetime.min.time().replace(hour=15))
+
         mock_client = Mock()
         mock_client.authenticate.return_value = True
-        mock_client.get_today_events.return_value = [{"summary": "今日の予定"}]
-        mock_client.get_week_events.return_value = [{"summary": "今週の予定"}]
+        mock_client.get_week_events.return_value = [today_event, week_event]
         mock_calendar_client.return_value = mock_client
 
         # モックの設定（ImageGenerator）
@@ -49,12 +58,13 @@ class TestWallpaperService:
         # 検証
         assert result_path == Path("/tmp/test_wallpaper.png")
         mock_client.authenticate.assert_called_once()
-        mock_client.get_today_events.assert_called_once()
         mock_client.get_week_events.assert_called_once()
-        mock_generator.generate_wallpaper.assert_called_once_with(
-            [{"summary": "今日の予定"}],
-            [{"summary": "今週の予定"}]
-        )
+        # get_today_eventsは呼ばれない（API統合済み）
+        mock_client.get_today_events.assert_not_called()
+        # generate_wallpaperの引数: today_eventsは今日分のみ、week_eventsは全件
+        call_args = mock_generator.generate_wallpaper.call_args
+        assert call_args[0][0] == [today_event]  # today_events
+        assert call_args[0][1] == [today_event, week_event]  # week_events
 
     @patch('src.viewmodels.wallpaper_service.WallpaperSetter')
     def test_set_wallpaper(self, mock_wallpaper_setter):
@@ -191,24 +201,35 @@ class TestWallpaperService:
     @patch('src.viewmodels.wallpaper_service.CalendarClient')
     @patch('src.viewmodels.wallpaper_service.ImageGenerator')
     def test_generate_wallpaper_with_events(self, mock_image_generator, mock_calendar_client):
-        """実際のイベントデータで壁紙生成が動作することを確認"""
+        """複数イベントで壁紙生成が動作することを確認（API1回呼び出し）"""
+        from datetime import datetime, timedelta
         from src.viewmodels.wallpaper_service import WallpaperService
 
-        # モックの設定（CalendarClient - 実際のイベントデータ）
-        today_events = [
-            {"summary": "朝のミーティング", "start": "2024-02-05T09:00:00"},
-            {"summary": "昼食", "start": "2024-02-05T12:00:00"}
-        ]
-        week_events = [
-            {"summary": "月曜タスク", "start": "2024-02-05T10:00:00"},
-            {"summary": "火曜プレゼン", "start": "2024-02-06T14:00:00"},
-            {"summary": "水曜レビュー", "start": "2024-02-07T15:00:00"}
-        ]
+        today = datetime.now().date()
+
+        # 今日のイベント2件
+        event_morning = Mock(summary="朝のミーティング")
+        event_morning.start_datetime = datetime.combine(today, datetime.min.time().replace(hour=9))
+        event_morning.end_datetime = datetime.combine(today, datetime.min.time().replace(hour=10))
+
+        event_lunch = Mock(summary="昼食")
+        event_lunch.start_datetime = datetime.combine(today, datetime.min.time().replace(hour=12))
+        event_lunch.end_datetime = datetime.combine(today, datetime.min.time().replace(hour=13))
+
+        # 週のイベント（今日以外）
+        event_tue = Mock(summary="火曜プレゼン")
+        event_tue.start_datetime = datetime.combine(today + timedelta(days=1), datetime.min.time().replace(hour=14))
+        event_tue.end_datetime = datetime.combine(today + timedelta(days=1), datetime.min.time().replace(hour=15))
+
+        event_wed = Mock(summary="水曜レビュー")
+        event_wed.start_datetime = datetime.combine(today + timedelta(days=2), datetime.min.time().replace(hour=15))
+        event_wed.end_datetime = datetime.combine(today + timedelta(days=2), datetime.min.time().replace(hour=16))
+
+        all_week_events = [event_morning, event_lunch, event_tue, event_wed]
 
         mock_client = Mock()
         mock_client.authenticate.return_value = True
-        mock_client.get_today_events.return_value = today_events
-        mock_client.get_week_events.return_value = week_events
+        mock_client.get_week_events.return_value = all_week_events
         mock_calendar_client.return_value = mock_client
 
         # モックの設定（ImageGenerator）
@@ -221,4 +242,6 @@ class TestWallpaperService:
 
         # 検証
         assert result_path == Path("/tmp/test_wallpaper.png")
-        mock_generator.generate_wallpaper.assert_called_once_with(today_events, week_events)
+        call_args = mock_generator.generate_wallpaper.call_args
+        assert call_args[0][0] == [event_morning, event_lunch]  # today_events
+        assert call_args[0][1] == all_week_events  # week_events

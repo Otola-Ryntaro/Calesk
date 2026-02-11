@@ -405,15 +405,10 @@ class EffectsRendererMixin:
             slot_y_start = grid_y_start + int((now.hour - WEEK_CALENDAR_START_HOUR) * hour_height)
             slot_y_end = slot_y_start + int(hour_height)
 
-            overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-            overlay_draw = ImageDraw.Draw(overlay)
-            overlay_draw.rectangle(
-                [(grid_x_start, slot_y_start),
-                 (grid_x_start + DAY_COLUMN_WIDTH, slot_y_end)],
-                fill=highlight_color
-            )
-            image.alpha_composite(overlay)
-            del overlay_draw
+            region_w = DAY_COLUMN_WIDTH
+            region_h = slot_y_end - slot_y_start
+            overlay = Image.new('RGBA', (region_w, region_h), highlight_color)
+            image.alpha_composite(overlay, dest=(grid_x_start, slot_y_start))
             overlay.close()
             draw = ImageDraw.Draw(image)
 
