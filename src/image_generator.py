@@ -56,6 +56,19 @@ logger = logging.getLogger(__name__)
 class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMixin):
     """壁紙画像生成クラス（新デザイン対応）"""
 
+    # フォント定義（属性名 → (サイズ設定値, bold)）
+    _FONT_DEFS = {
+        'font_card_date': (FONT_SIZE_CARD_DATE, False),
+        'font_card_time': (FONT_SIZE_CARD_TIME, False),
+        'font_card_title': (FONT_SIZE_CARD_TITLE, False),
+        'font_card_location': (FONT_SIZE_CARD_LOCATION, False),
+        'font_hour_label': (FONT_SIZE_HOUR_LABEL, False),
+        'font_day_header': (FONT_SIZE_DAY_HEADER, False),
+        'font_event_block': (FONT_SIZE_EVENT_BLOCK, False),
+        'font_card_time_bold': (FONT_SIZE_CARD_TIME, True),
+        'font_day_header_bold': (FONT_SIZE_DAY_HEADER, True),
+    }
+
     def __init__(self):
         self.system = platform.system()
         self._custom_background_path = None
@@ -70,18 +83,12 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             self.height = IMAGE_HEIGHT
             logger.info(f"デフォルト解像度を使用: {self.width}x{self.height}")
 
-        # 各種フォントを読み込み
-        self.font_card_date = self._get_font(FONT_SIZE_CARD_DATE)
-        self.font_card_time = self._get_font(FONT_SIZE_CARD_TIME)
-        self.font_card_title = self._get_font(FONT_SIZE_CARD_TITLE)
-        self.font_card_location = self._get_font(FONT_SIZE_CARD_LOCATION)
-        self.font_hour_label = self._get_font(FONT_SIZE_HOUR_LABEL)
-        self.font_day_header = self._get_font(FONT_SIZE_DAY_HEADER)
-        self.font_event_block = self._get_font(FONT_SIZE_EVENT_BLOCK)
+        # フォントキャッシュ（遅延ロード用）
+        self._font_cache = {}
 
-        # Bold用フォント（時刻表示の強調用）
-        self.font_card_time_bold = self._get_font_bold(FONT_SIZE_CARD_TIME)
-        self.font_day_header_bold = self._get_font_bold(FONT_SIZE_DAY_HEADER)
+        # 背景画像キャッシュ
+        self._cached_background = None
+        self._cached_background_path = None
 
         # レイアウト計算（動的）
         self.layout = self._calculate_layout()
@@ -89,6 +96,18 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
         # テーマ初期化（ChainMapでDEFAULT_THEMEをフォールバックに）
         self.theme_name = THEME
         self.theme = ChainMap(themes.get_theme(THEME), DEFAULT_THEME)
+
+    def __getattr__(self, name):
+        """フォント属性の遅延ロード"""
+        if name in ImageGenerator._FONT_DEFS:
+            size, bold = ImageGenerator._FONT_DEFS[name]
+            if name not in self._font_cache:
+                if bold:
+                    self._font_cache[name] = self._get_font_bold(size)
+                else:
+                    self._font_cache[name] = self._get_font(size)
+            return self._font_cache[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def _get_font(self, size: int) -> ImageFont.FreeTypeFont:
         """システムに応じた日本語フォントを取得"""
@@ -155,6 +174,18 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             'calendar_height': calendar_height,
             'header_height': header_h
         }
+
+    def release_resources(self):
+        """
+        メモリ上のリソースを解放（フォントキャッシュ、背景画像キャッシュ）
+        バックグラウンド待機時のメモリ消費を削減
+        """
+        self._font_cache = {}
+        if self._cached_background:
+            self._cached_background.close()
+        self._cached_background = None
+        self._cached_background_path = None
+        logger.debug("ImageGeneratorリソースを解放しました")
 
     def set_theme(self, theme_name: str):
         """
@@ -270,14 +301,22 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
                 # カスタム背景画像が設定されている場合はそちらを優先
                 bg_path = self._custom_background_path or BACKGROUND_IMAGE_PATH
                 if bg_path and Path(bg_path).exists():
-                    logger.info(f"背景画像を読み込んでいます: {bg_path}")
-                    background = Image.open(bg_path)
-                    background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
-                    # RGBAモードに変換（半透明カード対応）
-                    if background.mode != 'RGBA':
-                        image = background.convert('RGBA')
+                    # 背景画像キャッシュ: 同じパスなら再読み込みしない
+                    if self._cached_background and self._cached_background_path == str(bg_path):
+                        logger.info("キャッシュ済み背景画像を使用します")
+                        image = self._cached_background.copy()
                     else:
-                        image = background
+                        logger.info(f"背景画像を読み込んでいます: {bg_path}")
+                        background = Image.open(bg_path)
+                        background = background.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                        if background.mode != 'RGBA':
+                            resized = background.convert('RGBA')
+                            background.close()
+                            background = resized
+                        # キャッシュに保存
+                        self._cached_background = background
+                        self._cached_background_path = str(bg_path)
+                        image = background.copy()
                 else:
                     # デフォルト背景（白、RGBAモード）
                     logger.info("デフォルト背景を生成します")
@@ -303,6 +342,7 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             if image.mode == 'RGBA':
                 rgb_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
                 rgb_image.paste(image, mask=image.split()[3])
+                image.close()  # RGBA画像を明示的に解放
                 image = rgb_image
 
             # 画像を保存

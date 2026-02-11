@@ -79,6 +79,9 @@ class WallpaperService:
                 theme=theme_name
             )
 
+            # 生成完了後にメモリ解放（バックグラウンド待機時の消費削減）
+            self.image_generator.release_resources()
+
             return image_path
 
         except Exception as e:
