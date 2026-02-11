@@ -1,4 +1,4 @@
-# カレンダー壁紙アプリ - ユーザーガイド
+# Calendar Wallpaper Desktop - ユーザーガイド
 
 詳細な使い方、設定、トラブルシューティングガイド
 
@@ -26,16 +26,16 @@
 
 ### 依存パッケージ
 
-以下のパッケージが自動的にインストールされます：
+以下のパッケージが自動的にインストールされます（詳細は`requirements.txt`を参照）:
 
-```
-google-api-python-client==2.110.0  # Google Calendar API
-google-auth-oauthlib==1.2.0        # OAuth2認証
-Pillow==10.4.0                     # 画像生成
-PyQt6==6.6.1                       # GUIフレームワーク
-plyer==2.1.0                       # 通知機能
-schedule==1.2.0                    # スケジューラー
-python-dotenv==1.0.0               # 環境変数管理
+```text
+google-api-python-client  # Google Calendar API
+google-auth-oauthlib      # OAuth2認証
+Pillow                    # 画像生成
+PyQt6                     # GUIフレームワーク
+plyer                     # 通知機能
+schedule                  # スケジューラー
+python-dotenv             # 環境変数管理
 ```
 
 ### Google Calendar API設定（詳細）
@@ -64,7 +64,7 @@ python-dotenv==1.0.0               # 環境変数管理
 
 1. 作成した認証情報の右側にあるダウンロードアイコンをクリック
 2. ダウンロードしたファイルを`credentials.json`にリネーム
-3. プロジェクトルート（`calender_desktop/`）に配置
+3. `credentials/`ディレクトリに配置
 
 #### 5. 初回認証
 
@@ -207,6 +207,28 @@ THEME = 'vibrant'
 - **カード**: 鮮やかな色、角丸あり
 - **用途**: ポップで明るい雰囲気が好みの方向け
 
+#### 6. luxury（ラグジュアリー）
+
+```python
+THEME = 'luxury'
+```
+
+- **特徴**: 高級感のあるミニマルデザイン
+- **背景**: アイボリーホワイト基調
+- **カード**: ゴールドアクセント、繊細な枠線
+- **用途**: 上品で落ち着いたデスクトップ環境向け
+
+#### 7. playful（プレイフル）
+
+```python
+THEME = 'playful'
+```
+
+- **特徴**: 遊び心のある柔らかいデザイン
+- **背景**: ウォームホワイト基調
+- **カード**: コーラルピンク枠、大きめの角丸、ターコイズアクセント
+- **用途**: 明るくカジュアルな雰囲気が好みの方向け
+
 ### テーマの変更方法
 
 #### GUI経由（推奨）
@@ -222,7 +244,7 @@ THEME = 'vibrant'
 
 ```python
 # テーマ設定
-THEME = 'modern'  # simple, modern, pastel, dark, vibrant
+THEME = 'modern'  # simple, modern, pastel, dark, vibrant, luxury, playful
 ```
 
 ---
@@ -340,7 +362,8 @@ crontab -e
 **原因**: Google Cloud Consoleからダウンロードした認証ファイルが見つからない
 
 **解決方法**:
-1. `credentials.json`がプロジェクトルートに配置されているか確認
+
+1. `credentials.json`が`credentials/`ディレクトリに配置されているか確認
 2. ファイル名が正確に`credentials.json`であることを確認
 
 #### エラー: `The authentication token has expired`
@@ -349,7 +372,7 @@ crontab -e
 
 **解決方法**:
 ```bash
-rm token.json
+rm credentials/token.json
 python main.py --auth
 ```
 
@@ -413,7 +436,7 @@ python main.py --auth
 
 1. **認証スコープ確認**: 再認証を実行
    ```bash
-   rm token.json
+   rm credentials/token.json
    python main.py --auth
    ```
 
@@ -458,60 +481,55 @@ pytest tests/ --cov=src --cov-report=html
 pytest tests/test_calendar_client.py -v
 ```
 
-**テスト結果**: ✅ **235テスト全合格**
+テスト数: 614件
 
 ### ディレクトリ構造
 
-```
+```text
 calender_desktop/
-├── src/                      # ソースコード
-│   ├── models/              # データモデル
-│   │   └── event.py        # CalendarEventモデル
-│   ├── ui/                  # GUI関連
-│   │   ├── main_window.py  # メインウィンドウ
-│   │   └── preview_widget.py # プレビューウィジェット
-│   ├── viewmodels/          # ViewModel層
-│   │   ├── main_viewmodel.py
-│   │   └── wallpaper_service.py
-│   ├── calendar_client.py   # Google Calendar API
-│   ├── image_generator.py   # 壁紙生成
-│   ├── notifier.py          # 通知機能
-│   ├── scheduler.py         # スケジューラー
-│   ├── wallpaper_setter.py  # 壁紙設定
-│   ├── themes.py            # テーマ定義
-│   └── config.py            # 設定ファイル
-├── tests/                   # テストコード
-├── docs/                    # ドキュメント
-├── assets/                  # リソース
-├── main.py                  # CLIエントリーポイント
-├── run_gui.py               # GUIエントリーポイント
-├── requirements.txt         # 依存パッケージ
-├── README.md                # プロジェクト概要
-└── USER_GUIDE.md            # このファイル
+├── src/                          # ソースコード
+│   ├── models/                   # データモデル
+│   │   └── event.py              # CalendarEventモデル
+│   ├── renderers/                # 描画Mixin
+│   │   ├── effects.py            # エフェクト描画（ガラスモーフィズム等）
+│   │   ├── card_renderer.py      # イベントカード描画
+│   │   └── calendar_renderer.py  # 週間カレンダー描画
+│   ├── ui/                       # GUI関連
+│   │   ├── main_window.py        # メインウィンドウ
+│   │   ├── settings_dialog.py    # 設定ダイアログ
+│   │   └── widgets/              # カスタムウィジェット
+│   ├── viewmodels/               # ViewModel層
+│   │   ├── main_viewmodel.py     # メインViewModel
+│   │   └── wallpaper_service.py  # 壁紙生成サービス
+│   ├── calendar_client.py        # Google Calendar API（複数アカウント対応）
+│   ├── image_generator.py        # 壁紙画像生成（省メモリ設計）
+│   ├── display_info.py           # ディスプレイ情報取得
+│   ├── wallpaper_cache.py        # 壁紙キャッシュ管理
+│   ├── wallpaper_setter.py       # 壁紙設定
+│   ├── notifier.py               # 通知機能
+│   ├── scheduler.py              # スケジューラー
+│   ├── themes.py                 # テーマ定義（7種）
+│   └── config.py                 # 設定ファイル
+├── tests/                        # テストコード（614件）
+├── docs/                         # 開発ドキュメント
+├── assets/                       # リソース（背景画像等）
+├── credentials/                  # 認証情報（.gitignore対象）
+├── main.py                       # CLIエントリーポイント
+├── run_gui.py                    # GUIエントリーポイント
+├── requirements.txt              # 依存パッケージ
+├── README.md                     # プロジェクト概要
+└── USER_GUIDE.md                 # このファイル
 ```
 
 ### アーキテクチャ
 
-```
-┌─────────────┐
-│     UI      │ ← PyQt6 GUI
-│  (PyQt6)    │
-└─────┬───────┘
-      │
-┌─────▼──────────┐
-│   ViewModel    │ ← MVVM パターン
-│  (Business)    │
-└─────┬──────────┘
-      │
-┌─────▼──────────┐
-│   Service      │ ← WallpaperService
-│  (Domain)      │
-└─────┬──────────┘
-      │
-┌─────▼──────────┐
-│  Data Layer    │ ← CalendarClient, ImageGenerator
-│  (API/Storage) │
-└────────────────┘
+```text
+MVVM + Service層
+
+UI (PyQt6)  ->  ViewModel  ->  WallpaperService  ->  ImageGenerator / CalendarClient
+                                                       |-- EffectsRendererMixin
+                                                       |-- CardRendererMixin
+                                                       +-- CalendarRendererMixin
 ```
 
 ### コーディング規約
@@ -527,8 +545,7 @@ calender_desktop/
 1. Forkしてブランチを作成
 2. TDDでテストを先に書く
 3. コードを実装してテストをパス
-4. Codexレビューを実行
-5. プルリクエストを作成
+4. プルリクエストを作成
 
 ---
 
@@ -536,7 +553,7 @@ calender_desktop/
 
 ### Q: 複数のGoogleアカウントで使用できますか？
 
-A: 現在は1つのアカウントのみ対応しています。異なるアカウントを使用する場合は、`token.json`を削除して再認証してください。
+A: 対応しています。GUI設定ダイアログの「アカウント管理」セクションから複数のGoogleアカウントを追加し、カレンダーごとに表示色を設定できます。
 
 ### Q: 壁紙の解像度を変更したい
 
@@ -544,7 +561,7 @@ A: `src/config.py`の`IMAGE_WIDTH`と`IMAGE_HEIGHT`を変更してください�
 
 ### Q: 背景画像を変更したい
 
-A: `assets/background.jpg`を好きな画像に置き換えてください。PNG、JPG、JPEG形式に対応しています。
+A: GUI設定ダイアログの「背景画像」セクションから画像をアップロードできます。PNG、JPG、JPEG形式に対応しています。また`assets/background.jpg`を直接置き換えることも可能です。
 
 ### Q: 通知を無効にしたい
 
@@ -566,4 +583,4 @@ A: `src/themes.py`に新しいテーマを追加できます。詳細は開発�
 
 ---
 
-**最終更新**: 2026-02-05
+**最終更新**: 2026-02-11

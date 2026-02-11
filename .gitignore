@@ -37,9 +37,9 @@ env/
 *~
 
 # Google API Credentials
-credentials/credentials.json
-credentials/token.pickle
-credentials/token.json
+credentials/
+token.json
+token.pickle
 
 # Generated wallpapers
 output/*.png
@@ -61,3 +61,27 @@ logs/
 htmlcov/
 .pytest_cache/
 /tmp/
+
+# Build artifacts (PyInstaller)
+*.spec
+
+# Claude Code / AI tool settings
+.claude/
+CLAUDE.md
+Codex/
+
+# Personal notes / reports
+memo.md
+Agent.md
+Concept.md
+Codex-SKILL.md
+project-setup.md
+claudedocs/
+daily_report/
+Screenshots/
+
+# macOS launchd settings (contain local paths)
+*.plist
+
+# Local config overrides
+config/
