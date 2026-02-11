@@ -7,13 +7,53 @@ import logging
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QCheckBox, QSpinBox, QLabel, QPushButton, QGroupBox, QFormLayout,
-    QListWidget, QListWidgetItem, QInputDialog, QColorDialog
+    QListWidget, QListWidgetItem, QInputDialog, QColorDialog, QProgressDialog
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from ..viewmodels.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
+
+
+class AuthWorker(QThread):
+    """OAuth認証を別スレッドで実行するWorker"""
+    finished = pyqtSignal(object)  # 認証完了シグナル（accountオブジェクト）
+    error = pyqtSignal(str)  # エラーシグナル
+    canceled = pyqtSignal()  # キャンセルシグナル
+
+    def __init__(self, calendar_client, display_name):
+        super().__init__()
+        self.calendar_client = calendar_client
+        self.display_name = display_name
+        self._is_canceled = False
+
+    def cancel(self):
+        """キャンセルフラグを設定（協調的キャンセル）"""
+        self._is_canceled = True
+
+    def run(self):
+        """別スレッドで認証実行"""
+        try:
+            # キャンセルチェック
+            if self._is_canceled:
+                self.canceled.emit()
+                return
+
+            account = self.calendar_client.add_account(self.display_name)
+
+            # キャンセルチェック（認証完了後）
+            if self._is_canceled:
+                self.canceled.emit()
+                return
+
+            self.finished.emit(account)
+        except Exception as e:
+            if self._is_canceled:
+                self.canceled.emit()
+            else:
+                logger.error(f"認証エラー: {e}")
+                self.error.emit(str(e))
 
 
 class SettingsDialog(QDialog):
@@ -222,11 +262,42 @@ class SettingsDialog(QDialog):
             self, "アカウント追加", "アカウント名:"
         )
         if ok and display_name:
-            # OAuth2フロー起動
-            account = self._calendar_client.add_account(display_name)
-            if account:
-                logger.info(f"アカウントを追加しました: {account.get('email', display_name)}")
-            self.refresh_account_list()
+            # OAuth2フローを別スレッドで起動
+            self.auth_worker = AuthWorker(self._calendar_client, display_name)
+            self.auth_worker.finished.connect(self._on_auth_finished)
+            self.auth_worker.error.connect(self._on_auth_error)
+            self.auth_worker.canceled.connect(self._on_auth_cancel_complete)
+
+            # プログレスダイアログ表示
+            self.progress_dialog = QProgressDialog("Google認証中...", "キャンセル", 0, 0, self)
+            self.progress_dialog.setWindowTitle("認証")
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.canceled.connect(self._on_auth_canceled)
+            self.progress_dialog.show()
+
+            self.auth_worker.start()
+
+    def _on_auth_finished(self, account):
+        """認証完了時の処理"""
+        self.progress_dialog.close()
+        if account:
+            logger.info(f"アカウントを追加しました: {account.get('email', 'unknown')}")
+        self.refresh_account_list()
+
+    def _on_auth_error(self, error_message):
+        """認証エラー時の処理"""
+        self.progress_dialog.close()
+        logger.error(f"認証エラー: {error_message}")
+
+    def _on_auth_canceled(self):
+        """認証キャンセル時の処理（協調的キャンセル）"""
+        if hasattr(self, 'auth_worker') and self.auth_worker.isRunning():
+            self.auth_worker.cancel()
+
+    def _on_auth_cancel_complete(self):
+        """キャンセル完了時の処理"""
+        self.progress_dialog.close()
+        logger.info("認証がキャンセルされました")
 
     def _on_remove_account(self):
         """削除ボタンクリック"""

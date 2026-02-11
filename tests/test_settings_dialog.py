@@ -293,18 +293,30 @@ class TestAccountsManagementWidget:
         assert isinstance(dialog_with_auth.change_color_button, QPushButton)
 
     def test_add_account_button_click(self, qtbot, dialog_with_auth, mock_calendar_client):
-        """アカウント追加ボタンクリックでadd_account()が呼ばれること"""
+        """アカウント追加ボタンクリックでAuthWorkerが起動すること"""
         # add_account()のモック設定
-        mock_calendar_client.add_account.return_value = {
+        mock_account = {
             'id': 'account_1',
             'email': 'test@example.com',
             'color': '#4285f4',
             'display_name': 'テストアカウント'
         }
+        mock_calendar_client.add_account.return_value = mock_account
 
         # QInputDialogのモック（ユーザー入力をシミュレート）
         with patch('PyQt6.QtWidgets.QInputDialog.getText', return_value=('テストアカウント', True)):
             qtbot.mouseClick(dialog_with_auth.add_account_button, Qt.MouseButton.LeftButton)
+
+        # AuthWorkerが作成されたことを確認
+        assert hasattr(dialog_with_auth, 'auth_worker')
+        assert dialog_with_auth.auth_worker is not None
+
+        # プログレスダイアログが作成されたことを確認
+        assert hasattr(dialog_with_auth, 'progress_dialog')
+        assert dialog_with_auth.progress_dialog is not None
+
+        # スレッドが完了するまで待機
+        qtbot.waitUntil(lambda: not dialog_with_auth.auth_worker.isRunning(), timeout=5000)
 
         # add_account()が呼ばれたことを確認
         mock_calendar_client.add_account.assert_called_once_with('テストアカウント')

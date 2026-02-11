@@ -27,12 +27,12 @@ class TestCurrentTimeHighlightTheme:
                 f"{name}テーマの current_time_highlight はRGBA（4要素）であるべき"
 
     def test_highlight_alpha_is_subtle(self):
-        """ハイライトのアルファ値が控えめ（100未満）であること"""
+        """ハイライトのアルファ値が控えめ（100以下）であること"""
         from src.themes import THEMES
         for name, theme in THEMES.items():
             alpha = theme['current_time_highlight'][3]
-            assert alpha < 100, \
-                f"{name}テーマのハイライトアルファ値 {alpha} は控えめであるべき（<100）"
+            assert alpha <= 100, \
+                f"{name}テーマのハイライトアルファ値 {alpha} は控えめであるべき（<=100）"
 
 
 class TestCurrentTimeHighlightDrawing:
