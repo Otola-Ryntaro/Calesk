@@ -115,7 +115,7 @@ class TestMainWindow:
         """MainWindowが正しく初期化されることを確認"""
         assert window_with_mock is not None
         assert isinstance(window_with_mock, QMainWindow)
-        assert window_with_mock.windowTitle() == "カレンダー壁紙アプリ"
+        assert window_with_mock.windowTitle() == "Calesk"
         assert window_with_mock.viewmodel is mock_viewmodel
 
     def test_main_window_has_theme_combobox(self, window_with_mock, mock_viewmodel):

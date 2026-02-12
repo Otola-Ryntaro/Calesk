@@ -1,4 +1,4 @@
-# Calendar Wallpaper Desktop
+# Calesk（カレスク）
 
 Google Calendarの予定をデスクトップ壁紙として表示するPythonアプリケーション
 
@@ -30,8 +30,8 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 
 | OS | ダウンロードファイル | 起動方法 |
 | --- | --- | --- |
-| macOS | `CalendarWallpaper-macOS.zip` | 展開 → 右クリック →「開く」 |
-| Windows | `CalendarWallpaper-Windows.zip` | 展開 → `CalendarWallpaper.exe` をダブルクリック |
+| macOS | `Calesk-macOS.zip` | 展開 → 右クリック →「開く」 |
+| Windows | `Calesk-Windows.zip` | 展開 → `Calesk.exe` をダブルクリック |
 
 > 詳細は [USER_GUIDE.md](USER_GUIDE.md) を参照してください。
 

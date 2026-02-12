@@ -92,10 +92,10 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 # ユーザーのホームディレクトリから読み込む
 if getattr(sys, 'frozen', False):
     # PyInstaller バンドル内での実行 - ユーザーのホームディレクトリを使用
-    CREDENTIALS_DIR = Path.home() / '.calendar_wallpaper' / 'credentials'
+    CREDENTIALS_DIR = Path.home() / '.calesk' / 'credentials'
     CREDENTIALS_PATH = CREDENTIALS_DIR / 'credentials.json'
     TOKEN_PATH = CREDENTIALS_DIR / 'token.json'
-    CONFIG_DIR = Path.home() / '.calendar_wallpaper' / 'config'
+    CONFIG_DIR = Path.home() / '.calesk' / 'config'
 else:
     # 開発環境 - プロジェクトディレクトリを使用
     CREDENTIALS_PATH = BASE_DIR / 'credentials' / 'credentials.json'

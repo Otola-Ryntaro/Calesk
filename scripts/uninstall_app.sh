@@ -1,16 +1,16 @@
 #!/bin/bash
-# CalendarWallpaper.app アンインストールスクリプト
+# Calesk.app アンインストールスクリプト
 
 set -e  # エラー時に即座に終了
 
 echo "========================================="
-echo "Calendar Wallpaper アンインストール"
+echo "Calesk アンインストール"
 echo "========================================="
 
 # アンインストール確認
 echo ""
 echo "以下の操作を実行します:"
-echo "  1. /Applications/CalendarWallpaper.app を削除"
+echo "  1. /Applications/Calesk.app を削除"
 echo "  2. LaunchAgent を削除"
 echo "  3. ログイン時自動起動を無効化"
 echo ""
@@ -25,7 +25,7 @@ fi
 echo ""
 echo "[1/3] ログイン時自動起動を無効化中..."
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="com.tkojima.calendarwallpaper.plist"
+PLIST_FILE="com.tkojima.calesk.plist"
 
 if [ -f "$LAUNCH_AGENTS_DIR/$PLIST_FILE" ]; then
     launchctl unload "$LAUNCH_AGENTS_DIR/$PLIST_FILE" 2>/dev/null || true
@@ -38,8 +38,8 @@ fi
 # [2] アプリケーションの削除
 echo ""
 echo "[2/3] アプリケーションを削除中..."
-if [ -d "/Applications/CalendarWallpaper.app" ]; then
-    rm -rf "/Applications/CalendarWallpaper.app"
+if [ -d "/Applications/Calesk.app" ]; then
+    rm -rf "/Applications/Calesk.app"
     echo "✅ アプリケーションを削除しました"
 else
     echo "⚠️  アプリケーションが見つかりませんでした（スキップ）"

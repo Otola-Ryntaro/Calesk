@@ -1,10 +1,10 @@
-# カレンダー壁紙アプリの自動起動をアンインストール（Windows）
+# Caleskの自動起動をアンインストール（Windows）
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== カレンダー壁紙アプリ 自動起動アンインストール (Windows) ===" -ForegroundColor Green
+Write-Host "=== Calesk 自動起動アンインストール (Windows) ===" -ForegroundColor Green
 Write-Host ""
 
-$TaskName = "CalendarWallpaperUpdate"
+$TaskName = "CaleskUpdate"
 
 # タスクの削除
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {

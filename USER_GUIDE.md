@@ -1,4 +1,4 @@
-# Calendar Wallpaper Desktop - ユーザーガイド
+# Calesk（カレスク） - ユーザーガイド
 
 詳細な使い方、設定、トラブルシューティングガイド
 
@@ -24,15 +24,15 @@ Pythonのインストールは不要です。
 
 ### macOS
 
-1. [Releases](../../releases) ページから最新の `CalendarWallpaper.app.zip` をダウンロード
+1. [Releases](../../releases) ページから最新の `Calesk.app.zip` をダウンロード
 2. ZIPファイルをダブルクリックして展開
-3. `CalendarWallpaper.app` を「アプリケーション」フォルダにドラッグ&ドロップ
+3. `Calesk.app` を「アプリケーション」フォルダにドラッグ&ドロップ
 
 **初回起動時の注意（macOS Gatekeeper）**:
 
 macOSのセキュリティ機能により、初回起動時にブロックされることがあります。
 
-1. `CalendarWallpaper.app` を右クリック（またはControlキーを押しながらクリック）
+1. `Calesk.app` を右クリック（またはControlキーを押しながらクリック）
 2. メニューから「開く」を選択
 3. 「開く」ボタンをクリック（「開発元を検証できません」と表示されますが問題ありません）
 
@@ -48,13 +48,13 @@ Python環境が必要です（[開発者向けインストール](#開発者向�
 bash scripts/build_app.sh
 ```
 
-ビルドが完了すると `dist/CalendarWallpaper.app` が生成されます。
+ビルドが完了すると `dist/Calesk.app` が生成されます。
 
 ### Windows
 
-1. [Releases](../../releases) ページから最新の `CalendarWallpaper-Windows.zip` をダウンロード
+1. [Releases](../../releases) ページから最新の `Calesk-Windows.zip` をダウンロード
 2. ZIPファイルを右クリック →「すべて展開」
-3. 展開されたフォルダ内の `CalendarWallpaper.exe` をダブルクリックで起動
+3. 展開されたフォルダ内の `Calesk.exe` をダブルクリックで起動
 
 **初回起動時の注意（Windows SmartScreen）**:
 
@@ -66,7 +66,7 @@ Windows Defenderの SmartScreen により、初回起動時に警告が表示さ
 
 > 2回目以降は警告なしで起動できます。
 
-**推奨**: `CalendarWallpaper` フォルダごと好きな場所（例: `C:\Users\ユーザー名\Apps\`）に移動して使用してください。
+**推奨**: `Calesk` フォルダごと好きな場所（例: `C:\Users\ユーザー名\Apps\`）に移動して使用してください。
 
 ### Linux
 
@@ -140,7 +140,7 @@ Google Cloud上に「プロジェクト」という入れ物を作ります。
    - 初めての場合は「My First Project」と表示されているかもしれません
 2. 開いたダイアログの右上にある「新しいプロジェクト」をクリック
 3. 以下を入力:
-   - **プロジェクト名**: `calendar-wallpaper`（好きな名前でOK）
+   - **プロジェクト名**: `calesk`（好きな名前でOK）
    - **場所**: 「組織なし」のままでOK
 4. 「作成」をクリック
 5. 数秒待つと作成完了の通知が表示される
@@ -170,7 +170,7 @@ Google Cloud上に「プロジェクト」という入れ物を作ります。
    - （「内部」はGoogle Workspace組織専用なので、個人利用では「外部」を選択）
 
 3. 以下を入力:
-   - **アプリ名**: `Calendar Wallpaper`（好きな名前でOK）
+   - **アプリ名**: `Calesk`（好きな名前でOK）
    - **ユーザーサポートメール**: 自分のGmailアドレスを選択
    - **デベロッパーの連絡先情報**: 自分のGmailアドレスを入力
    - それ以外の項目（アプリのロゴ、アプリのホームページなど）は**空欄のまま**でOK
@@ -202,7 +202,7 @@ Google Cloud上に「プロジェクト」という入れ物を作ります。
 3. 「**OAuthクライアントID**」を選択
 4. 以下を入力:
    - **アプリケーションの種類**: 「**デスクトップアプリ**」を選択
-   - **名前**: `Calendar Wallpaper Client`（好きな名前でOK）
+   - **名前**: `Calesk Client`（好きな名前でOK）
 5. 「**作成**」をクリック
 
 6. 「OAuthクライアントを作成しました」というダイアログが表示される
@@ -219,19 +219,19 @@ Google Cloud上に「プロジェクト」という入れ物を作ります。
 
 ```bash
 # 1. ホームディレクトリに設定フォルダを作成
-mkdir -p ~/.calendar_wallpaper/credentials
+mkdir -p ~/.calesk/credentials
 
 # 2. ダウンロードしたファイルをコピー&リネーム
-cp ~/Downloads/client_secret_XXXXX.json ~/.calendar_wallpaper/credentials/credentials.json
+cp ~/Downloads/client_secret_XXXXX.json ~/.calesk/credentials/credentials.json
 ```
 
 > `client_secret_XXXXX.json` の部分は実際にダウンロードされたファイル名に置き換えてください。
 
 #### アプリ版（Windows .exe）の場合
 
-1. エクスプローラーで `C:\Users\ユーザー名\.calendar_wallpaper\credentials\` フォルダを作成
+1. エクスプローラーで `C:\Users\ユーザー名\.calesk\credentials\` フォルダを作成
    - `Win + R` → `%USERPROFILE%` と入力して Enter
-   - `.calendar_wallpaper` フォルダを新規作成 → その中に `credentials` フォルダを新規作成
+   - `.calesk` フォルダを新規作成 → その中に `credentials` フォルダを新規作成
 2. ダウンロードした `client_secret_XXXXX.json` を上記フォルダにコピー
 3. ファイル名を `credentials.json` に変更
 
@@ -270,7 +270,7 @@ python main.py --auth
 
 #### アプリ版で認証する場合
 
-CalendarWallpaper.appをダブルクリックして起動してください。
+Calesk.appをダブルクリックして起動してください。
 
 #### ブラウザでの認証手順
 
@@ -282,9 +282,9 @@ CalendarWallpaper.appをダブルクリックして起動してください。
    > これは自分で作成したアプリなので正常な表示です。心配ありません。
 
    - 「**詳細**」をクリック（画面下部の小さいリンク）
-   - 「**Calendar Wallpaper（安全ではないページ）に移動**」をクリック
+   - 「**Calesk（安全ではないページ）に移動**」をクリック
 
-4. 「Calendar WallpaperがGoogleアカウントへのアクセスをリクエストしています」という画面が表示される
+4. 「CaleskがGoogleアカウントへのアクセスをリクエストしています」という画面が表示される
    - 「**許可**」をクリック
 
 5. 「認証が完了しました」というメッセージが表示される（またはブラウザタブを閉じてOK）
@@ -316,7 +316,7 @@ CalendarWallpaper.appをダブルクリックして起動してください。
 # Python版
 python run_gui.py
 
-# アプリ版: CalendarWallpaper.appをダブルクリック
+# アプリ版: Calesk.appをダブルクリック
 ```
 
 #### GUI画面の構成
@@ -409,7 +409,7 @@ kill <プロセスID>
 6. ブラウザが自動的に開く
 7. 追加したいGoogleアカウントでログイン
 8. 「このアプリはGoogleで確認されていません」が表示された場合:
-   - 「**詳細**」→「**Calendar Wallpaper（安全ではないページ）に移動**」をクリック
+   - 「**詳細**」→「**Calesk（安全ではないページ）に移動**」をクリック
 9. 「**許可**」をクリック
 10. アプリに戻ると、アカウント一覧に新しいアカウントが追加される
 
@@ -441,7 +441,7 @@ kill <プロセスID>
 | token_{id}.json | アカウントごとの認証トークン。アカウント追加時に自動生成 |
 | accounts.json | アカウント一覧の管理ファイル（表示名・色・有効/無効） |
 | 保存場所（Python版） | `config/` ディレクトリ |
-| 保存場所（アプリ版） | `~/.calendar_wallpaper/config/` |
+| 保存場所（アプリ版） | `~/.calesk/config/` |
 
 ---
 
@@ -633,8 +633,8 @@ UPDATE_TIME = '06:00'
 #### アプリ版: スタートアップに登録（推奨）
 
 1. `Win + R` → `shell:startup` と入力して Enter
-2. 開いたフォルダに `CalendarWallpaper.exe` のショートカットを作成
-   - `CalendarWallpaper.exe` を右クリック →「ショートカットの作成」
+2. 開いたフォルダに `Calesk.exe` のショートカットを作成
+   - `Calesk.exe` を右クリック →「ショートカットの作成」
    - 作成したショートカットをスタートアップフォルダに移動
 
 > PC起動時に自動的にアプリが立ち上がります。
@@ -835,7 +835,7 @@ source venv/bin/activate
 bash scripts/build_app.sh
 ```
 
-ビルド成果物: `dist/CalendarWallpaper.app`
+ビルド成果物: `dist/Calesk.app`
 
 #### Windowsビルド
 
@@ -844,7 +844,7 @@ venv\Scripts\activate.bat
 scripts\build_app.bat
 ```
 
-ビルド成果物: `dist\CalendarWallpaper\CalendarWallpaper.exe`
+ビルド成果物: `dist\Calesk\Calesk.exe`
 
 #### GitHub Actions（自動ビルド）
 
@@ -855,7 +855,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-ビルド設定は `CalendarWallpaper.spec`（macOS）と `CalendarWallpaper_windows.spec`（Windows）で管理しています。
+ビルド設定は `Calesk.spec`（macOS）と `Calesk_windows.spec`（Windows）で管理しています。
 `credentials/` はバンドルに含まれないため、ユーザーは初回起動時に自分で配置する必要があります。
 
 ### ディレクトリ構造
@@ -891,7 +891,7 @@ calender_desktop/
 ├── credentials/                  # 認証情報（.gitignore対象）
 ├── main.py                       # CLIエントリーポイント
 ├── run_gui.py                    # GUIエントリーポイント
-├── CalendarWallpaper.spec        # PyInstallerビルド設定
+├── Calesk.spec        # PyInstallerビルド設定
 ├── requirements.txt              # 依存パッケージ
 ├── README.md                     # プロジェクト概要
 └── USER_GUIDE.md                 # このファイル

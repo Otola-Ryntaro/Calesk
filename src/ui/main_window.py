@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
     """
     メインウィンドウ
 
-    カレンダー壁紙アプリのメインウィンドウです。
+    Caleskのメインウィンドウです。
     テーマ選択、プレビュー表示、壁紙更新機能を提供します。
     """
 
@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
             parent (QWidget, optional): 親ウィジェット。デフォルトはNone。
         """
         super().__init__(parent)
-        self.setWindowTitle("カレンダー壁紙アプリ")
+        self.setWindowTitle("Calesk")
         self.resize(800, 600)
 
         # ViewModelの初期化

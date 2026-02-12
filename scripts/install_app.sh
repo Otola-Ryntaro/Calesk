@@ -1,18 +1,18 @@
 #!/bin/bash
-# CalendarWallpaper.app インストールスクリプト
+# Calesk.app インストールスクリプト
 
 set -e  # エラー時に即座に終了
 
 echo "========================================="
-echo "Calendar Wallpaper インストール"
+echo "Calesk インストール"
 echo "========================================="
 
 # プロジェクトルートに移動
 cd "$(dirname "$0")/.."
 
 # アプリケーションバンドルの存在確認
-if [ ! -d "dist/CalendarWallpaper.app" ]; then
-    echo "❌ エラー: dist/CalendarWallpaper.app が見つかりません"
+if [ ! -d "dist/Calesk.app" ]; then
+    echo "❌ エラー: dist/Calesk.app が見つかりません"
     echo "先に scripts/build_app.sh を実行してビルドしてください"
     exit 1
 fi
@@ -20,7 +20,7 @@ fi
 # インストール確認
 echo ""
 echo "以下の操作を実行します:"
-echo "  1. CalendarWallpaper.app を /Applications にコピー"
+echo "  1. Calesk.app を /Applications にコピー"
 echo "  2. LaunchAgent を ~/Library/LaunchAgents にコピー"
 echo "  3. ログイン時自動起動を有効化"
 echo ""
@@ -34,18 +34,18 @@ fi
 # [1] アプリケーションのコピー
 echo ""
 echo "[1/3] アプリケーションを /Applications にコピー中..."
-if [ -d "/Applications/CalendarWallpaper.app" ]; then
+if [ -d "/Applications/Calesk.app" ]; then
     echo "既存のアプリケーションを削除します..."
-    rm -rf "/Applications/CalendarWallpaper.app"
+    rm -rf "/Applications/Calesk.app"
 fi
-cp -R "dist/CalendarWallpaper.app" "/Applications/"
+cp -R "dist/Calesk.app" "/Applications/"
 echo "✅ アプリケーションをコピーしました"
 
 # [2] LaunchAgent のコピー
 echo ""
 echo "[2/3] LaunchAgent を設定中..."
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="com.tkojima.calendarwallpaper.plist"
+PLIST_FILE="com.tkojima.calesk.plist"
 
 if [ ! -d "$LAUNCH_AGENTS_DIR" ]; then
     mkdir -p "$LAUNCH_AGENTS_DIR"
@@ -72,11 +72,11 @@ echo "========================================="
 echo "インストール完了"
 echo "========================================="
 echo ""
-echo "✅ CalendarWallpaper が /Applications にインストールされました"
+echo "✅ Calesk が /Applications にインストールされました"
 echo "✅ ログイン時に自動起動するように設定されました"
 echo ""
 echo "📝 次のステップ:"
-echo "  1. /Applications/CalendarWallpaper.app をダブルクリックして起動"
+echo "  1. /Applications/Calesk.app をダブルクリックして起動"
 echo "  2. 初回起動時にGoogleアカウント認証を行ってください"
 echo "  3. 設定から自動更新の間隔を調整できます"
 echo ""

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tkojima.calesk</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Calesk.app/Contents/MacOS/Calesk</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <!-- ログ出力はアプリ側で管理するため、plistでは指定しない -->
+</dict>
+</plist>

@@ -1,5 +1,5 @@
 """
-カレンダー壁紙アプリ - メインプログラム
+Calesk - メインプログラム
 Google Calendarの予定をデスクトップ壁紙として表示
 """
 import sys
@@ -35,7 +35,7 @@ def setup_logging(log_level: str = None) -> None:
             logging.StreamHandler()
         ]
     )
-    logging.info("=== カレンダー壁紙アプリを起動 ===")
+    logging.info("=== Calesk を起動 ===")
 
 
 def update_wallpaper() -> bool:

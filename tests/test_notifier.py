@@ -51,7 +51,7 @@ class TestSendNotification:
         mock_notification.notify.assert_called_once_with(
             title="テスト",
             message="テストメッセージ",
-            app_name="カレンダー壁紙アプリ",
+            app_name="Calesk",
             timeout=10,
         )
 
@@ -297,7 +297,7 @@ class TestSendUpdateNotification:
         mock_notification.notify.assert_called_once_with(
             title="壁紙を更新しました",
             message="今日の予定が表示されています",
-            app_name="カレンダー壁紙アプリ",
+            app_name="Calesk",
             timeout=5,
         )
 

@@ -30,18 +30,18 @@ jobs:
 
       - name: Build macOS app
         run: |
-          pyinstaller CalendarWallpaper.spec --clean --noconfirm
+          pyinstaller Calesk.spec --clean --noconfirm
 
       - name: Create ZIP archive
         run: |
           cd dist
-          zip -r CalendarWallpaper-macOS.zip CalendarWallpaper.app
+          zip -r Calesk-macOS.zip Calesk.app
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CalendarWallpaper-macOS
-          path: dist/CalendarWallpaper-macOS.zip
+          name: Calesk-macOS
+          path: dist/Calesk-macOS.zip
 
   build-windows:
     runs-on: windows-latest
@@ -60,17 +60,17 @@ jobs:
 
       - name: Build Windows exe
         run: |
-          pyinstaller CalendarWallpaper_windows.spec --clean --noconfirm
+          pyinstaller Calesk_windows.spec --clean --noconfirm
 
       - name: Create ZIP archive
         run: |
-          Compress-Archive -Path dist\CalendarWallpaper -DestinationPath dist\CalendarWallpaper-Windows.zip
+          Compress-Archive -Path dist\Calesk -DestinationPath dist\Calesk-Windows.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CalendarWallpaper-Windows
-          path: dist/CalendarWallpaper-Windows.zip
+          name: Calesk-Windows
+          path: dist/Calesk-Windows.zip
 
   release:
     needs: [build-macos, build-windows]
@@ -80,19 +80,19 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: CalendarWallpaper-macOS
+          name: Calesk-macOS
           path: artifacts/
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: CalendarWallpaper-Windows
+          name: Calesk-Windows
           path: artifacts/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/CalendarWallpaper-macOS.zip
-            artifacts/CalendarWallpaper-Windows.zip
+            artifacts/Calesk-macOS.zip
+            artifacts/Calesk-Windows.zip
           generate_release_notes: true

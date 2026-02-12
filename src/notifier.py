@@ -25,7 +25,7 @@ class Notifier:
         self,
         title: str,
         message: str,
-        app_name: str = 'カレンダー壁紙アプリ',
+        app_name: str = 'Calesk',
         timeout: int = 10
     ) -> bool:
         """

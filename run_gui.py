@@ -15,7 +15,7 @@ from src.ui.main_window import MainWindow
 def main():
     """GUIアプリケーションを起動"""
     app = QApplication(sys.argv)
-    app.setApplicationName("カレンダー壁紙アプリ")
+    app.setApplicationName("Calesk")
 
     window = MainWindow()
     window.show()

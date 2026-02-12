@@ -1,9 +1,9 @@
-# カレンダー壁紙アプリの自動起動をインストール（Windows）
+# Caleskの自動起動をインストール（Windows）
 # PowerShellスクリプト
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== カレンダー壁紙アプリ 自動起動インストール (Windows) ===" -ForegroundColor Green
+Write-Host "=== Calesk 自動起動インストール (Windows) ===" -ForegroundColor Green
 Write-Host ""
 
 # プロジェクトディレクトリの取得
@@ -20,8 +20,8 @@ if (-not (Test-Path $PythonPath)) {
 }
 
 # タスクスケジューラーに登録
-$TaskName = "CalendarWallpaperUpdate"
-$TaskDescription = "カレンダー壁紙を毎日06:00に自動更新"
+$TaskName = "CaleskUpdate"
+$TaskDescription = "Caleskの壁紙を毎日06:00に自動更新"
 
 # 既存のタスクを削除
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {

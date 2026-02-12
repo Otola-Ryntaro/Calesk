@@ -18,7 +18,7 @@ from ..config import (
 logger = logging.getLogger(__name__)
 
 # デフォルトの設定ディレクトリ
-DEFAULT_SETTINGS_DIR = Path.home() / ".calendar_wallpaper"
+DEFAULT_SETTINGS_DIR = Path.home() / ".calesk"
 
 
 class SettingsService:

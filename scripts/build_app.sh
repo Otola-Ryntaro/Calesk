@@ -1,10 +1,10 @@
 #!/bin/bash
-# CalendarWallpaper.app ビルドスクリプト
+# Calesk.app ビルドスクリプト
 
 set -e  # エラー時に即座に終了
 
 echo "========================================="
-echo "Calendar Wallpaper アプリケーションビルド"
+echo "Calesk アプリケーションビルド"
 echo "========================================="
 
 # プロジェクトルートに移動
@@ -26,22 +26,22 @@ echo ""
 echo "[2/2] PyInstaller でビルド中..."
 echo "注: credentials/ はバンドルに含まれません。"
 echo "    ユーザーは初回起動時に認証を行ってください。"
-pyinstaller CalendarWallpaper.spec --clean --noconfirm
+pyinstaller Calesk.spec --clean --noconfirm
 
 # ビルド結果の確認
 echo ""
 echo "========================================="
 echo "ビルド完了"
 echo "========================================="
-if [ -d "dist/CalendarWallpaper.app" ]; then
-    echo "✅ アプリケーションバンドル: dist/CalendarWallpaper.app"
+if [ -d "dist/Calesk.app" ]; then
+    echo "✅ アプリケーションバンドル: dist/Calesk.app"
     echo ""
     echo "アプリケーション情報:"
-    ls -lh dist/CalendarWallpaper.app
-    du -sh dist/CalendarWallpaper.app
+    ls -lh dist/Calesk.app
+    du -sh dist/Calesk.app
     echo ""
     echo "起動テスト:"
-    echo "  open dist/CalendarWallpaper.app"
+    echo "  open dist/Calesk.app"
 else
     echo "❌ ビルドに失敗しました"
     exit 1

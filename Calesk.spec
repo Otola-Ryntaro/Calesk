@@ -1,5 +1,4 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Windows用 PyInstaller spec ファイル
 
 
 a = Analysis(
@@ -23,7 +22,7 @@ a = Analysis(
         'PIL.Image',
         'PIL.ImageDraw',
         'PIL.ImageFont',
-        'plyer.platforms.win.notification',
+        'plyer.platforms.macosx.notification',
     ],
     hookspath=[],
     hooksconfig={},
@@ -42,7 +41,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='CalendarWallpaper',
+    name='Calesk',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -53,7 +52,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
 )
 coll = COLLECT(
     exe,
@@ -62,5 +60,20 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='CalendarWallpaper',
+    name='Calesk',
+)
+app = BUNDLE(
+    coll,
+    name='Calesk.app',
+    icon=None,
+    bundle_identifier='com.tkojima.calesk',
+    info_plist={
+        'CFBundleDisplayName': 'Calesk',
+        'CFBundleName': 'Calesk',
+        'CFBundleVersion': '1.0.0',
+        'CFBundleShortVersionString': '1.0.0',
+        'NSHighResolutionCapable': True,
+        'NSSupportsAutomaticGraphicsSwitching': True,
+        'LSUIElement': True,  # 常駐アプリのため Dock アイコンを非表示
+    },
 )
