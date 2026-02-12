@@ -350,12 +350,37 @@ class CardRendererMixin:
                 )
                 card_y += COMPACT_CARD_HEIGHT + COMPACT_CARD_MARGIN
 
-            # 表示しきれない件数がある場合
+            # 表示しきれない件数がある場合、バッジ風に表示
             remaining = len(events) - MAX_CARDS_PER_COLUMN
             if remaining > 0:
+                badge_text = f'+{remaining}件'
+                badge_pad_x = 8
+                badge_pad_y = 3
+                bbox = self.font_card_location.getbbox(badge_text)
+                badge_w = (bbox[2] - bbox[0]) + badge_pad_x * 2
+                badge_h = (bbox[3] - bbox[1]) + badge_pad_y * 2
+                badge_x = col_x + 10
+                badge_y = card_y + 2
+
+                if image is not None:
+                    card_bg = self.theme.get('card_bg', (255, 255, 255))
+                    badge_bg = card_bg[:3] + (180,) if len(card_bg) >= 3 else (255, 255, 255, 180)
+                    badge_radius = self.theme.get('card_radius', 0)
+                    overlay = Image.new('RGBA', (badge_w, badge_h), (0, 0, 0, 0))
+                    overlay_draw = ImageDraw.Draw(overlay)
+                    overlay_draw.rounded_rectangle(
+                        [(0, 0), (badge_w - 1, badge_h - 1)],
+                        radius=min(badge_radius, badge_h // 2),
+                        fill=badge_bg
+                    )
+                    image.alpha_composite(overlay, dest=(badge_x, badge_y))
+                    del overlay_draw
+                    overlay.close()
+                    draw = ImageDraw.Draw(image)
+
                 draw.text(
-                    (col_x + 10, card_y + 2),
-                    f'+{remaining}件',
+                    (badge_x + badge_pad_x, badge_y + badge_pad_y),
+                    badge_text,
                     font=self.font_card_location,
                     fill=text_color
                 )
