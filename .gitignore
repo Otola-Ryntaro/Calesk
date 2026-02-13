@@ -65,6 +65,10 @@ htmlcov/
 # Build artifacts (PyInstaller)
 # Note: *.spec files are tracked (needed for build)
 
+# Icon source / intermediate files
+assets/Whisk_*.jpeg
+assets/Calesk.iconset/
+
 # Claude Code / AI tool settings
 .claude/
 CLAUDE.md

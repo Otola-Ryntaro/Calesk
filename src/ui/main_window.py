@@ -503,9 +503,13 @@ class MainWindow(QMainWindow):
         # トレイアイコンを作成
         self._tray_icon = QSystemTrayIcon(self)
 
-        # アイコンを設定（システムのデフォルトアイコンを使用）
-        # NOTE: カスタムアイコンは assets/tray_icon.png に配置可能
-        self._tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+        # カスタムトレイアイコンを設定（なければシステムデフォルト）
+        from PyQt6.QtGui import QIcon
+        tray_icon_path = Path(__file__).parent.parent.parent / 'assets' / 'tray_icon_32.png'
+        if tray_icon_path.exists():
+            self._tray_icon.setIcon(QIcon(str(tray_icon_path)))
+        else:
+            self._tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
 
         # トレイメニューを作成
         tray_menu = QMenu(self)

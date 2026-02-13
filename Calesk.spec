@@ -65,7 +65,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='Calesk.app',
-    icon=None,
+    icon='assets/Calesk.icns',
     bundle_identifier='com.tkojima.calesk',
     info_plist={
         'CFBundleDisplayName': 'Calesk',
