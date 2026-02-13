@@ -730,12 +730,12 @@ class TestSystemTrayIcon:
         # アクションを取得
         actions = tray_menu.actions()
 
-        # 4つのアクション（今すぐ更新/設定/表示/終了、セパレータ除く）
+        # 4つのアクション（今すぐ更新/設定/ウィンドウを開く/終了、セパレータ除く）
         action_texts = [action.text() for action in actions if not action.isSeparator()]
         assert len(action_texts) >= 4
         assert "今すぐ更新" in action_texts
         assert "設定" in action_texts
-        assert "表示" in action_texts
+        assert "ウィンドウを開く" in action_texts
         assert "終了" in action_texts
 
     def test_tray_update_now_action(self, window_with_mock, mock_viewmodel):
@@ -759,7 +759,7 @@ class TestSystemTrayIcon:
         mock_viewmodel.update_wallpaper.assert_called_once()
 
     def test_tray_show_action(self, window_with_mock):
-        """「表示」アクションでウィンドウが表示されること"""
+        """「ウィンドウを開く」アクションでウィンドウが表示されること"""
         # ウィンドウを非表示にする
         window_with_mock.hide()
         assert not window_with_mock.isVisible()
@@ -767,10 +767,10 @@ class TestSystemTrayIcon:
         tray_menu = window_with_mock._tray_icon.contextMenu()
         actions = tray_menu.actions()
 
-        # 「表示」アクションを探す
+        # 「ウィンドウを開く」アクションを探す
         show_action = None
         for action in actions:
-            if action.text() == "表示":
+            if action.text() == "ウィンドウを開く":
                 show_action = action
                 break
 

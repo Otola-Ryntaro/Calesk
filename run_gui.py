@@ -25,8 +25,23 @@ def _find_icon() -> str | None:
     return None
 
 
+def _set_macos_dock_name(name: str):
+    """macOSのDock表示名を設定（開発環境用）"""
+    if sys.platform != 'darwin':
+        return
+    try:
+        from Foundation import NSBundle
+        bundle = NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info is not None:
+            info['CFBundleName'] = name
+    except ImportError:
+        pass
+
+
 def main():
     """GUIアプリケーションを起動"""
+    _set_macos_dock_name("Calesk")
     app = QApplication(sys.argv)
     app.setApplicationName("Calesk")
 

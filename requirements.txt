@@ -13,5 +13,8 @@ PyQt6==6.6.1
 # Testing
 pytest-qt==4.2.0
 
+# macOS Dock name (development)
+pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+
 # Packaging
 pyinstaller==6.18.0

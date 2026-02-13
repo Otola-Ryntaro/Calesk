@@ -525,8 +525,8 @@ class MainWindow(QMainWindow):
         # セパレータ
         tray_menu.addSeparator()
 
-        # 「表示」アクション
-        show_action = tray_menu.addAction("表示")
+        # 「ウィンドウを開く」アクション
+        show_action = tray_menu.addAction("ウィンドウを開く")
         show_action.triggered.connect(self._show_window)
 
         # 「終了」アクション
