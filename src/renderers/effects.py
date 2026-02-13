@@ -5,6 +5,7 @@
 from datetime import datetime
 from typing import List, Tuple, Optional
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 from ..models.event import CalendarEvent
@@ -312,19 +313,18 @@ class EffectsRendererMixin:
             fill=(220, 220, 220)
         )
 
-        # 進行バー（グラデーション画像を生成してpaste）
+        # 進行バー（グラデーション）
         accent = self.theme.get('accent_color', None)
         start_color = accent if accent else (0, 122, 255)
         end_color = (0, 200, 100)
         progress_width = int(width * progress_ratio)
-        if progress_width > 0:
-            for i in range(progress_width):
-                ratio = i / width
-                color = self._interpolate_color(start_color, end_color, ratio)
-                draw.line(
-                    [(x + i, bar_y), (x + i, bar_y + bar_height)],
-                    fill=color
-                )
+        for px in range(progress_width):
+            ratio = px / width if width > 0 else 0
+            color = self._interpolate_color(start_color, end_color, ratio)
+            draw.line(
+                [(x + px, bar_y), (x + px, bar_y + bar_height)],
+                fill=color
+            )
 
     def _draw_chromatic_text(
         self,
@@ -437,12 +437,11 @@ class EffectsRendererMixin:
         if colors is None:
             colors = [(255, 255, 255), (245, 245, 240)]
 
-        # 背景画像を作成
-        image = Image.new('RGBA', (width, height))
-        draw = ImageDraw.Draw(image)
-
         if gradient_type == 'radial':
             # 放射状グラデーション（簡易版：同心円状に描画）
+            image = Image.new('RGBA', (width, height))
+            draw = ImageDraw.Draw(image)
+
             center_x, center_y = width / 2, height / 2
             max_radius = ((width / 2) ** 2 + (height / 2) ** 2) ** 0.5
 
@@ -464,29 +463,63 @@ class EffectsRendererMixin:
                 ]
                 draw.ellipse(bbox, fill=color + (255,))
 
+            return image
         else:
-            # 線形グラデーション（高速版：1行ずつrectangle）
-            if direction == 'horizontal':
-                # 水平方向
-                for x in range(width):
-                    ratio = x / width
-                    color = self._interpolate_gradient_color(colors, ratio)
-                    draw.rectangle([(x, 0), (x, height)], fill=color + (255,))
-            elif direction == 'diagonal':
-                # 斜め方向（Y方向で描画）
-                for y in range(height):
-                    # 斜め方向の平均的な比率
-                    ratio = y / height
-                    color = self._interpolate_gradient_color(colors, ratio)
-                    draw.rectangle([(0, y), (width, y)], fill=color + (255,))
-            else:  # vertical（デフォルト）
-                # 垂直方向
-                for y in range(height):
-                    ratio = y / height
-                    color = self._interpolate_gradient_color(colors, ratio)
-                    draw.rectangle([(0, y), (width, y)], fill=color + (255,))
+            # 線形グラデーション（NumPy一括生成）
+            return self._create_linear_gradient_numpy(
+                width, height, colors, direction
+            )
 
-        return image
+    def _create_linear_gradient_numpy(
+        self,
+        width: int,
+        height: int,
+        colors: List[Tuple[int, int, int]],
+        direction: str
+    ) -> Image.Image:
+        """NumPyベクトル演算による高速線形グラデーション生成
+
+        ピクセル単位のrectangle()ループをNumPy配列一括生成に置換。
+        """
+        # 軸方向のサイズを取得
+        if direction == 'horizontal':
+            axis_size = width
+        else:  # vertical or diagonal
+            axis_size = height
+
+        # 色の補間をNumPyで一括計算
+        ratios = np.linspace(0, 1, axis_size, dtype=np.float32)
+
+        # 複数色のグラデーション補間
+        segment_count = len(colors) - 1
+        colors_arr = np.array(colors, dtype=np.float32)
+
+        # 各ratioに対応するセグメントと局所比率を計算
+        segment_ratios = ratios * segment_count
+        segment_indices = np.clip(segment_ratios.astype(np.int32), 0, segment_count - 1)
+        local_ratios = segment_ratios - segment_indices
+
+        # 開始色と終了色を取得
+        start_colors = colors_arr[segment_indices]  # (axis_size, 3)
+        end_colors = colors_arr[np.minimum(segment_indices + 1, segment_count)]  # (axis_size, 3)
+
+        # 線形補間: start * (1 - ratio) + end * ratio
+        local_ratios_3d = local_ratios[:, np.newaxis]  # (axis_size, 1)
+        gradient_1d = (start_colors * (1 - local_ratios_3d) + end_colors * local_ratios_3d).astype(np.uint8)
+
+        # RGBA配列を構築（alpha=255）
+        alpha = np.full((axis_size, 1), 255, dtype=np.uint8)
+        gradient_rgba_1d = np.hstack([gradient_1d, alpha])  # (axis_size, 4)
+
+        # 2次元に展開
+        if direction == 'horizontal':
+            # (width, 4) → (height, width, 4)
+            arr = np.tile(gradient_rgba_1d[np.newaxis, :, :], (height, 1, 1))
+        else:  # vertical or diagonal
+            # (height, 4) → (height, width, 4)
+            arr = np.tile(gradient_rgba_1d[:, np.newaxis, :], (1, width, 1))
+
+        return Image.fromarray(arr, 'RGBA')
 
     def _interpolate_gradient_color(
         self,

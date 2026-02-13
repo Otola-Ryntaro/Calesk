@@ -28,6 +28,7 @@ class CalendarClient:
         self.creds = None
         self.accounts = {}  # {account_id: {'service': service, 'email': str, 'color': str, 'display_name': str}}
         self._expired_accounts = {}  # {account_id: {'email': str, ...}} トークン期限切れアカウント
+        self._local_tz = datetime.now(timezone.utc).astimezone().tzinfo
 
     @property
     def is_authenticated(self) -> bool:
@@ -140,7 +141,7 @@ class CalendarClient:
 
         try:
             # 時刻範囲の設定（今日の00:00から起算し、当日分の全イベントを含める）
-            local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+            local_tz = self._local_tz
             today_start = datetime.combine(
                 datetime.now().date(), datetime.min.time(), tzinfo=local_tz
             )
@@ -249,7 +250,7 @@ class CalendarClient:
         try:
             # 当日の時刻範囲: 今日の00:00:00 ~ 翌日の00:00:00（ローカルタイムゾーンaware）
             today = datetime.now().date()
-            local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+            local_tz = self._local_tz
             day_start = datetime.combine(today, datetime.min.time(), tzinfo=local_tz)
             day_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=local_tz)
 
@@ -754,7 +755,7 @@ class CalendarClient:
 
         # 日時範囲を設定（ローカルタイムゾーン基準）
         today = datetime.now().date()
-        local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+        local_tz = self._local_tz
         day_start = datetime.combine(today, datetime.min.time(), tzinfo=local_tz)
         day_end = datetime.combine(today + timedelta(days=days), datetime.min.time(), tzinfo=local_tz)
 

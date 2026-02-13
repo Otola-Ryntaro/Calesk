@@ -95,6 +95,106 @@ class CalendarRendererMixin:
             # フォールバック: label_bg と同じ
             draw.text((x, y), text, font=self.font_hour_label, fill=label_color)
 
+    def _draw_hour_labels_batch(
+        self,
+        draw: ImageDraw.ImageDraw,
+        image: Image.Image,
+        label_positions: list
+    ):
+        """
+        時刻ラベルを一括描画（RGBA合成回数を削減）
+
+        空リストの場合は何もしない。
+
+        個別の _draw_hour_label() では label_bg モード時に
+        ラベルごとに RGBA オーバーレイ画像を生成・合成していた。
+        この一括版では1枚のオーバーレイに全ラベル背景を描画し、
+        1回の alpha_composite で合成する。
+
+        Args:
+            draw: ImageDraw オブジェクト
+            image: 画像オブジェクト（半透明合成用）
+            label_positions: [(x, y, text), ...] のリスト
+        """
+        if not label_positions:
+            return
+
+        mode = LABEL_VISIBILITY_MODE
+        label_color = self.theme.get(
+            'hour_label_color', self.theme.get('text_color', (0, 0, 0))
+        )
+        label_bg = self.theme.get('hour_label_bg', (255, 255, 255, 180))
+
+        if mode == 'label_bg':
+            # 全ラベルの bbox を先に計算し、包含矩形を求める
+            pad = 3
+            label_radius = self.theme.get('hour_label_radius', 0)
+            bboxes = []
+            for lx, ly, text in label_positions:
+                bbox = draw.textbbox((lx, ly), text, font=self.font_hour_label)
+                bboxes.append((
+                    bbox[0] - pad, bbox[1] - pad,
+                    bbox[2] + pad, bbox[3] + pad
+                ))
+
+            # 包含矩形を計算
+            min_x = min(b[0] for b in bboxes)
+            min_y = min(b[1] for b in bboxes)
+            max_x = max(b[2] for b in bboxes)
+            max_y = max(b[3] for b in bboxes)
+
+            # 1枚のオーバーレイに全ラベル背景を描画
+            region_w = max_x - min_x
+            region_h = max_y - min_y
+            if region_w > 0 and region_h > 0:
+                overlay = Image.new('RGBA', (region_w, region_h), (0, 0, 0, 0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                for b in bboxes:
+                    rx1 = b[0] - min_x
+                    ry1 = b[1] - min_y
+                    rx2 = b[2] - min_x
+                    ry2 = b[3] - min_y
+                    if label_radius > 0:
+                        overlay_draw.rounded_rectangle(
+                            [(rx1, ry1), (rx2 - 1, ry2 - 1)],
+                            radius=label_radius, fill=label_bg
+                        )
+                    else:
+                        overlay_draw.rectangle(
+                            [(rx1, ry1), (rx2 - 1, ry2 - 1)],
+                            fill=label_bg
+                        )
+                image.alpha_composite(overlay, dest=(min_x, min_y))
+                del overlay_draw
+                overlay.close()
+
+            # テキストを描画（合成後のdrawで）
+            draw = ImageDraw.Draw(image)
+            for lx, ly, text in label_positions:
+                draw.text(
+                    (lx, ly), text,
+                    font=self.font_hour_label, fill=label_color
+                )
+
+        elif mode == 'outline':
+            stroke_color = label_bg[:3] if len(label_bg) >= 3 else (255, 255, 255)
+            for lx, ly, text in label_positions:
+                draw.text(
+                    (lx, ly), text,
+                    font=self.font_hour_label,
+                    fill=label_color,
+                    stroke_width=2,
+                    stroke_fill=stroke_color
+                )
+
+        else:
+            # 'none' およびフォールバック
+            for lx, ly, text in label_positions:
+                draw.text(
+                    (lx, ly), text,
+                    font=self.font_hour_label, fill=label_color
+                )
+
     def _draw_calendar_background(
         self,
         image: Image.Image,
@@ -341,7 +441,9 @@ class CalendarRendererMixin:
             # alpha_composite後にdrawを再取得
             draw = ImageDraw.Draw(image)
 
-        # グリッド線（横線：時間軸）
+        # グリッド線（横線：時間軸） + 時刻ラベルを一括描画
+        # ラベル背景オーバーレイ: 個別画像ではなく1枚に集約して1回合成
+        label_positions = []
         for hour in range(total_hours + 1):
             y = grid_y_start + hour * hour_height
             draw.line(
@@ -349,27 +451,17 @@ class CalendarRendererMixin:
                 fill=grid_color,
                 width=1
             )
-
-            # 時間ラベル（視認性モードに応じた描画）
             if hour < total_hours:
                 hour_value = WEEK_CALENDAR_START_HOUR + hour
-                if image is not None:
-                    self._draw_hour_label(
-                        draw, image,
-                        start_x - 45, y + 5,
-                        f"{hour_value:02d}:00"
-                    )
-                    # alpha_composite後にdrawを再取得
-                    draw = ImageDraw.Draw(image)
-                else:
-                    # imageが渡されない場合はフォールバック
-                    label_color = self.theme.get('hour_label_color', text_color)
-                    draw.text(
-                        (start_x - 45, y + 5),
-                        f"{hour_value:02d}:00",
-                        font=self.font_hour_label,
-                        fill=label_color
-                    )
+                label_positions.append((start_x - 45, y + 5, f"{hour_value:02d}:00"))
+
+        if image is not None and label_positions:
+            self._draw_hour_labels_batch(draw, image, label_positions)
+            draw = ImageDraw.Draw(image)
+        elif label_positions:
+            label_color = self.theme.get('hour_label_color', text_color)
+            for lx, ly, text in label_positions:
+                draw.text((lx, ly), text, font=self.font_hour_label, fill=label_color)
 
         # グリッド線（縦線：曜日）
         for i in range(8):
