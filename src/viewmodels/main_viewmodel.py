@@ -8,7 +8,7 @@ MVVMパターンにおけるViewModel層。
 from PyQt6.QtCore import pyqtSignal, QThreadPool, QTimer
 from pathlib import Path
 from typing import List, Optional, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from src.viewmodels.base_viewmodel import ViewModelBase
@@ -89,6 +89,12 @@ class MainViewModel(ViewModelBase):
         self._sleep_check_timer.setInterval(SLEEP_CHECK_INTERVAL_SECONDS * 1000)
         self._sleep_check_timer.timeout.connect(self._on_sleep_check)
         self._last_check_time = datetime.now()
+
+        # 日付変更検知
+        self._last_seen_date = datetime.now().date()
+        self._midnight_timer = QTimer(self)
+        self._midnight_timer.setSingleShot(True)
+        self._midnight_timer.timeout.connect(self._on_midnight_timeout)
 
         logger.info("MainViewModelを初期化しました")
 
@@ -470,6 +476,8 @@ class MainViewModel(ViewModelBase):
         self._auto_update_timer.start()
         self._sleep_check_timer.start()
         self._last_check_time = datetime.now()
+        self._last_seen_date = datetime.now().date()
+        self._schedule_midnight_timer()
         self.auto_update_status_changed.emit(True)
         logger.info("自動更新を開始しました")
 
@@ -477,6 +485,7 @@ class MainViewModel(ViewModelBase):
         """自動更新を停止"""
         self._auto_update_timer.stop()
         self._sleep_check_timer.stop()
+        self._midnight_timer.stop()
         self.auto_update_status_changed.emit(False)
         logger.info("自動更新を停止しました")
 
@@ -529,27 +538,64 @@ class MainViewModel(ViewModelBase):
 
     def _on_sleep_check(self):
         """
-        スリープ復帰検知のチェック処理
+        スリープ復帰検知 + 日付変更検知のチェック処理
 
         前回チェック時刻から大幅に時間が経過している場合（>2分）、
         スリープから復帰したと判定し、即座に壁紙更新を実行する。
+        また、日付が変わっていた場合もバックアップとして壁紙更新を行う。
         """
         from src.config import SLEEP_WAKE_THRESHOLD_SECONDS
 
         current_time = datetime.now()
         elapsed_seconds = (current_time - self._last_check_time).total_seconds()
+        triggered = False
 
         if elapsed_seconds > SLEEP_WAKE_THRESHOLD_SECONDS:
             # スリープ復帰検知
             logger.info(f"スリープ復帰を検知しました（経過時間: {elapsed_seconds:.1f}秒）")
-
-            # 自動更新が有効な場合のみ壁紙更新
             if self.is_auto_updating:
                 logger.info("スリープ復帰により即座に壁紙更新を実行します")
                 self.update_wallpaper()
+                triggered = True
+                # スリープ復帰時はmidnight timerも再スケジュール
+                self._schedule_midnight_timer()
+
+        # 日付変更検知（バックアップ）
+        current_date = current_time.date()
+        if current_date != self._last_seen_date:
+            logger.info(f"日付変更を検知: {self._last_seen_date} → {current_date}")
+            self._last_seen_date = current_date
+            if self.is_auto_updating:
+                self._schedule_midnight_timer()
+                if not triggered:
+                    logger.info("日付変更により壁紙更新を実行します")
+                    self.update_wallpaper()
 
         # 最後のチェック時刻を更新
         self._last_check_time = current_time
+
+    def _schedule_midnight_timer(self):
+        """次の0:00:01に発火するようmidnight timerをスケジュール
+
+        0:00:00ではなく0:00:01にすることで、日付境界を確実に跨いだ後に
+        datetime.now().date() が新しい日付を返すことを保証する。
+        """
+        now = datetime.now()
+        tomorrow = now.replace(hour=0, minute=0, second=1, microsecond=0) + timedelta(days=1)
+        ms_until_midnight = int((tomorrow - now).total_seconds() * 1000)
+        # 異常値の防御: 最小1秒、最大24時間+1秒にclamp
+        ms_until_midnight = max(1000, min(ms_until_midnight, 86_401_000))
+        self._midnight_timer.start(ms_until_midnight)
+        logger.debug(f"midnight timerをスケジュール: {ms_until_midnight}ms後")
+
+    def _on_midnight_timeout(self):
+        """midnight timer発火: 日付変更により壁紙更新"""
+        logger.info("midnight timerが発火しました — 日付変更検知")
+        self._last_seen_date = datetime.now().date()
+        self._schedule_midnight_timer()
+
+        if self.is_auto_updating:
+            self.update_wallpaper()
 
     def cleanup(self):
         """リソースの解放（タイマー停止等）"""
@@ -559,6 +605,8 @@ class MainViewModel(ViewModelBase):
             self._retry_timer.stop()
         if self._sleep_check_timer.isActive():
             self._sleep_check_timer.stop()
+        if self._midnight_timer.isActive():
+            self._midnight_timer.stop()
         if self._preview_debounce_timer.isActive():
             self._preview_debounce_timer.stop()
         if self._current_worker:

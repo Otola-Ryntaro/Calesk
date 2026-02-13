@@ -861,3 +861,214 @@ class TestSleepWakeDetection:
 
             # スリープチェックタイマーも停止
             assert not viewmodel._sleep_check_timer.isActive()
+
+
+class TestDateChangeDetection:
+    """日付変更検知のテスト"""
+
+    def test_midnight_timer_initialized(self, qapp):
+        """深夜タイマーがSingleShotで初期化されていること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            assert hasattr(viewmodel, '_midnight_timer')
+            assert viewmodel._midnight_timer.isSingleShot()
+            # 初期状態では停止
+            assert not viewmodel._midnight_timer.isActive()
+
+    def test_last_seen_date_initialized(self, qapp):
+        """_last_seen_dateが今日の日付で初期化されること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            assert hasattr(viewmodel, '_last_seen_date')
+            assert viewmodel._last_seen_date == datetime.now().date()
+
+    def test_schedule_midnight_timer_calculates_ms(self, qapp):
+        """_schedule_midnight_timerがms計算を正しく行うこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            viewmodel._schedule_midnight_timer()
+
+            # タイマーがアクティブになっている
+            assert viewmodel._midnight_timer.isActive()
+
+            # 間隔が0より大きく、24時間+1秒以下
+            remaining = viewmodel._midnight_timer.remainingTime()
+            assert remaining > 0
+            assert remaining <= 86401000  # 24h + 1s in ms
+
+    def test_midnight_timeout_triggers_update(self, qapp):
+        """_on_midnight_timeoutがupdate_wallpaperを呼ぶこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            with patch.object(viewmodel, 'update_wallpaper') as mock_update:
+                viewmodel._on_midnight_timeout()
+                mock_update.assert_called_once()
+
+            viewmodel.stop_auto_update()
+
+    def test_midnight_timeout_reschedules_timer(self, qapp):
+        """_on_midnight_timeout発火後にタイマーが再スケジュールされること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            with patch.object(viewmodel, 'update_wallpaper'):
+                viewmodel._on_midnight_timeout()
+
+            # タイマーが再スケジュールされている
+            assert viewmodel._midnight_timer.isActive()
+
+            viewmodel.stop_auto_update()
+
+    def test_midnight_timeout_updates_last_seen_date(self, qapp):
+        """_on_midnight_timeoutが_last_seen_dateを更新すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import date, timedelta
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # 昨日の日付をセット
+            yesterday = date.today() - timedelta(days=1)
+            viewmodel._last_seen_date = yesterday
+
+            with patch.object(viewmodel, 'update_wallpaper'):
+                viewmodel._on_midnight_timeout()
+
+            # 今日の日付に更新されている
+            assert viewmodel._last_seen_date == date.today()
+
+            viewmodel.stop_auto_update()
+
+    def test_date_change_in_sleep_check_triggers_update(self, qapp):
+        """_on_sleep_checkで日付変更を検知して壁紙更新すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, date, timedelta
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # 昨日の日付と最近のチェック時刻をセット（スリープ復帰ではない通常チェック）
+            viewmodel._last_seen_date = date.today() - timedelta(days=1)
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=30)
+
+            with patch.object(viewmodel, 'update_wallpaper') as mock_update:
+                viewmodel._on_sleep_check()
+                mock_update.assert_called_once()
+
+            viewmodel.stop_auto_update()
+
+    def test_same_date_in_sleep_check_no_update(self, qapp):
+        """同日のsleep checkでは日付変更による追加更新がないこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, timedelta
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # 通常の1分チェック（同日、閾値以下）
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=30)
+
+            with patch.object(viewmodel, 'update_wallpaper') as mock_update:
+                viewmodel._on_sleep_check()
+                mock_update.assert_not_called()
+
+            viewmodel.stop_auto_update()
+
+    def test_date_change_only_when_auto_update_enabled(self, qapp):
+        """自動更新が無効の場合、日付変更で壁紙更新しないこと"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, date, timedelta
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            # 自動更新はOFFのまま
+
+            viewmodel._last_seen_date = date.today() - timedelta(days=1)
+            viewmodel._last_check_time = datetime.now() - timedelta(seconds=30)
+            # スリープチェックを手動で呼ぶ（通常はstart_auto_updateで起動）
+            with patch.object(viewmodel, 'update_wallpaper') as mock_update:
+                viewmodel._on_sleep_check()
+                mock_update.assert_not_called()
+
+    def test_midnight_timer_starts_with_auto_update(self, qapp):
+        """start_auto_updateでmidnight timerも開始すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+
+            assert not viewmodel._midnight_timer.isActive()
+
+            viewmodel.start_auto_update()
+            assert viewmodel._midnight_timer.isActive()
+
+            viewmodel.stop_auto_update()
+
+    def test_midnight_timer_stops_with_auto_update(self, qapp):
+        """stop_auto_updateでmidnight timerも停止すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            assert viewmodel._midnight_timer.isActive()
+
+            viewmodel.stop_auto_update()
+            assert not viewmodel._midnight_timer.isActive()
+
+    def test_cleanup_stops_midnight_timer(self, qapp):
+        """cleanupでmidnight timerも停止すること"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            assert viewmodel._midnight_timer.isActive()
+
+            viewmodel.cleanup()
+            assert not viewmodel._midnight_timer.isActive()
+
+    def test_sleep_wake_with_date_change_single_update(self, qapp):
+        """スリープ復帰 + 日付跨ぎでも壁紙更新は1回だけ"""
+        from src.viewmodels.main_viewmodel import MainViewModel
+        from datetime import datetime, date, timedelta
+
+        with patch('src.viewmodels.main_viewmodel.WallpaperService'):
+            viewmodel = MainViewModel()
+            viewmodel.start_auto_update()
+
+            # スリープ復帰（閾値超え）+ 日付跨ぎをシミュレート
+            viewmodel._last_seen_date = date.today() - timedelta(days=1)
+            viewmodel._last_check_time = datetime.now() - timedelta(hours=8)
+
+            with patch.object(viewmodel, 'update_wallpaper') as mock_update:
+                viewmodel._on_sleep_check()
+                # スリープ復帰で1回呼ばれ、日付変更では重複呼び出しされない
+                mock_update.assert_called_once()
+
+            # _last_seen_dateは今日に更新されている
+            assert viewmodel._last_seen_date == date.today()
+
+            viewmodel.stop_auto_update()
