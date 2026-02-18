@@ -8,6 +8,23 @@ from pathlib import Path
 # プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).parent))
 
+# macOS Dock表示名の設定（PyQt6インポート前に実行する必要がある）
+if sys.platform == 'darwin':
+    try:
+        from Foundation import NSBundle
+        bundle = NSBundle.mainBundle()
+        info = bundle.infoDictionary()
+        if info is not None:
+            info['CFBundleName'] = 'Calesk'
+            info['CFBundleDisplayName'] = 'Calesk'
+    except ImportError:
+        pass
+    # プロセス名を変更（Dockホバー表示用）
+    import ctypes
+    import ctypes.util
+    _libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library('c'))
+    _libc.setprogname(b'Calesk')
+
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon
 from src.ui.main_window import MainWindow
@@ -25,23 +42,8 @@ def _find_icon() -> str | None:
     return None
 
 
-def _set_macos_dock_name(name: str):
-    """macOSのDock表示名を設定（開発環境用）"""
-    if sys.platform != 'darwin':
-        return
-    try:
-        from Foundation import NSBundle
-        bundle = NSBundle.mainBundle()
-        info = bundle.infoDictionary()
-        if info is not None:
-            info['CFBundleName'] = name
-    except ImportError:
-        pass
-
-
 def main():
     """GUIアプリケーションを起動"""
-    _set_macos_dock_name("Calesk")
     app = QApplication(sys.argv)
     app.setApplicationName("Calesk")
 
