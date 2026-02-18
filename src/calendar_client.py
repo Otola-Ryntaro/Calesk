@@ -5,6 +5,7 @@ OAuth2認証とカレンダーイベントの取得を担当
 import os
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import List, Dict, Optional
 import logging
 
@@ -18,6 +19,39 @@ from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS, ACCOUNTS
 from .models.event import CalendarEvent
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_email(email: str) -> str:
+    """メールアドレスをログ用にマスキング（例: t***@gmail.com）"""
+    if not email or '@' not in email:
+        return '***'
+    local, domain = email.split('@', 1)
+    return f"{local[0]}***@{domain}" if local else f"***@{domain}"
+
+
+def _secure_token_file(token_path: Path) -> None:
+    """
+    トークンファイルのパーミッションを現在ユーザーのみアクセス可能に制限
+
+    - Unix/macOS: chmod 0o600
+    - Windows: icacls で現在ユーザーのみフルコントロール付与、他を削除
+    """
+    import platform
+    if platform.system() == 'Windows':
+        import subprocess
+        import getpass
+        try:
+            username = getpass.getuser()
+            # 既存の継承ACLを削除し、現在ユーザーのみフルコントロール付与
+            subprocess.run(
+                ['icacls', str(token_path), '/inheritance:r',
+                 '/grant:r', f'{username}:F'],
+                check=True, capture_output=True
+            )
+        except Exception as e:
+            logger.warning(f"Windowsパーミッション設定失敗（トークンは保存済み）: {e}")
+    else:
+        os.chmod(token_path, 0o600)
 
 
 class CalendarClient:
@@ -72,7 +106,7 @@ class CalendarClient:
                     token.write(self.creds.to_json())
 
                 # セキュリティ: ファイルパーミッションを所有者のみ読み書き可能に制限
-                os.chmod(TOKEN_PATH, 0o600)
+                _secure_token_file(TOKEN_PATH)
                 logger.info("認証情報を保存しました")
 
             # Calendar APIサービスを構築
@@ -443,7 +477,7 @@ class CalendarClient:
             config = self._load_accounts_config()
             existing_emails = [a['email'] for a in config.get('accounts', [])]
             if email in existing_emails:
-                logger.warning(f"アカウント {email} は既に登録されています")
+                logger.warning(f"アカウント {_mask_email(email)} は既に登録されています")
                 return None
 
             # 3. 一意のaccount_idを生成
@@ -461,7 +495,7 @@ class CalendarClient:
                 token_file.write(creds.to_json())
 
             # セキュリティ: パーミッション制限
-            os.chmod(token_path, 0o600)
+            _secure_token_file(token_path)
 
             # 5. デフォルト色を割り当て
             color = self._get_next_default_color()
@@ -481,7 +515,7 @@ class CalendarClient:
             config['accounts'].append(account_info)
             self._save_accounts_config(config)
 
-            logger.info(f"新しいアカウントを追加しました: {email} (ID: {account_id})")
+            logger.info(f"新しいアカウントを追加しました: {_mask_email(email)} (ID: {account_id})")
             return account_info
 
         except Exception as e:
@@ -655,7 +689,7 @@ class CalendarClient:
                         with open(token_path, 'w') as token:
                             token.write(creds.to_json())
                         # トークンファイルの権限を600に設定
-                        os.chmod(token_path, 0o600)
+                        _secure_token_file(token_path)
                     else:
                         logger.warning(f"アカウント {account_id} のトークンが無効です")
                         # 期限切れアカウントとして記録
@@ -677,7 +711,7 @@ class CalendarClient:
                     'display_name': account.get('display_name', account.get('email', ''))
                 }
 
-                logger.info(f"アカウントを読み込みました: {account['email']} (ID: {account_id})")
+                logger.info(f"アカウントを読み込みました: {_mask_email(account['email'])} (ID: {account_id})")
 
             except Exception as e:
                 logger.error(f"アカウント {account_id} の読み込みエラー: {e}")

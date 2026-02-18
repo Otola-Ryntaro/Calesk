@@ -240,4 +240,11 @@ SLEEP_WAKE_THRESHOLD_SECONDS = 120  # スリープ復帰と判定する閾値（
 
 # === ログ設定 ===
 LOG_LEVEL = 'INFO'
-LOG_FILE = BASE_DIR / 'calendar_app.log'
+if getattr(sys, 'frozen', False):
+    # 配布ビルド: ユーザーホームの永続ディレクトリに保存
+    _LOG_DIR = Path.home() / '.calesk' / 'logs'
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_FILE = _LOG_DIR / 'calendar_app.log'
+else:
+    # 開発環境: プロジェクトルートに保存
+    LOG_FILE = BASE_DIR / 'calendar_app.log'

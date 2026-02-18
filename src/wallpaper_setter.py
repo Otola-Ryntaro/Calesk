@@ -4,6 +4,7 @@ OS別に壁紙を設定する機能を提供
 """
 import platform
 import ctypes
+import re
 import subprocess
 import logging
 from pathlib import Path
@@ -18,6 +19,10 @@ ALLOWED_IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.PNG', '.J
 # セキュリティ: 最大ファイルサイズ（50MB）
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
+# セキュリティ: パスに含まれてはならない制御文字（NULL、改行以外の制御文字）
+# AppleScript/KDE evaluateScript へのインジェクション防止
+_DANGEROUS_PATH_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
 
 class WallpaperSetter:
     """壁紙設定クラス"""
@@ -25,6 +30,25 @@ class WallpaperSetter:
     def __init__(self):
         self.system = platform.system()
         logger.info(f"検出されたOS: {self.system}")
+
+    def _validate_wallpaper_path(self, path: Path) -> bool:
+        """
+        壁紙パスに危険な文字が含まれていないことを一元検証
+
+        AppleScript/KDE evaluateScript へのインジェクションを防ぐため、
+        制御文字（NULLバイト等）を事前に弾く。
+
+        Args:
+            path: 検証対象パス（resolve済みの絶対パス）
+
+        Returns:
+            bool: 安全なパスはTrue、危険な文字を含む場合はFalse
+        """
+        path_str = str(path)
+        if _DANGEROUS_PATH_RE.search(path_str):
+            logger.error("壁紙パスに不正な制御文字が含まれています（インジェクション防止）")
+            return False
+        return True
 
     def set_wallpaper(self, image_path: Path) -> bool:
         """
@@ -54,6 +78,10 @@ class WallpaperSetter:
 
         # 絶対パスに変換
         abs_path = image_path.resolve()
+
+        # セキュリティ: 制御文字によるインジェクション防止（一元検証）
+        if not self._validate_wallpaper_path(abs_path):
+            return False
 
         try:
             if self.system == 'Windows':
