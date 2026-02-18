@@ -237,7 +237,8 @@ class CardRendererMixin:
                 draw, event,
                 hero_x + 12, hero_y,
                 hero_width - 24,
-                card_height=hero_height
+                card_height=hero_height,
+                image=image,
             )
 
     def _draw_event_cards(
@@ -493,7 +494,8 @@ class CardRendererMixin:
         x: int,
         y: int,
         is_finished: bool = False,
-        is_in_progress: bool = False
+        is_in_progress: bool = False,
+        image: Image.Image = None
     ):
         """1つのイベントを1枚のカードに描画"""
         # テーマから色と設定を取得
@@ -615,7 +617,8 @@ class CardRendererMixin:
                 event,
                 x + CARD_PADDING,
                 y,
-                CARD_WIDTH - CARD_PADDING * 2
+                CARD_WIDTH - CARD_PADDING * 2,
+                image=image,
             )
 
     def _draw_empty_card(

@@ -275,7 +275,8 @@ class EffectsRendererMixin:
         x: int,
         y: int,
         width: int,
-        card_height: int = None
+        card_height: int = None,
+        image: Image.Image = None,
     ):
         """現在進行中のイベントに進行状況バーを描画
 
@@ -286,6 +287,7 @@ class EffectsRendererMixin:
             y: バーのY座標
             width: バーの幅
             card_height: カードの高さ（Noneの場合はデフォルトCARD_HEIGHT）
+            image: Imageオブジェクト（指定時はNumPy一括生成で高速描画）
         """
         if card_height is None:
             card_height = CARD_HEIGHT
@@ -318,13 +320,27 @@ class EffectsRendererMixin:
         start_color = accent if accent else (0, 122, 255)
         end_color = (0, 200, 100)
         progress_width = int(width * progress_ratio)
-        for px in range(progress_width):
-            ratio = px / width if width > 0 else 0
-            color = self._interpolate_color(start_color, end_color, ratio)
-            draw.line(
-                [(x + px, bar_y), (x + px, bar_y + bar_height)],
-                fill=color
-            )
+        if progress_width <= 0:
+            return
+
+        if image is not None:
+            # NumPy一括生成：ピクセル単位ループを排除
+            ratios = np.linspace(0, 1, progress_width, dtype=np.float32)
+            sc = np.array(start_color[:3], dtype=np.float32)
+            ec = np.array(end_color[:3], dtype=np.float32)
+            colors_1d = (sc * (1 - ratios[:, np.newaxis]) + ec * ratios[:, np.newaxis]).astype(np.uint8)
+            bar_arr = np.tile(colors_1d[np.newaxis, :, :], (bar_height, 1, 1))
+            bar_img = Image.fromarray(bar_arr, 'RGB')
+            image.paste(bar_img, (x, bar_y))
+            bar_img.close()
+        else:
+            for px in range(progress_width):
+                ratio = px / width if width > 0 else 0
+                color = self._interpolate_color(start_color, end_color, ratio)
+                draw.line(
+                    [(x + px, bar_y), (x + px, bar_y + bar_height)],
+                    fill=color
+                )
 
     def _draw_chromatic_text(
         self,
@@ -438,32 +454,29 @@ class EffectsRendererMixin:
             colors = [(255, 255, 255), (245, 245, 240)]
 
         if gradient_type == 'radial':
-            # 放射状グラデーション（簡易版：同心円状に描画）
-            image = Image.new('RGBA', (width, height))
-            draw = ImageDraw.Draw(image)
+            # 放射状グラデーション（NumPy距離配列で一括計算）
+            center_x, center_y = width / 2.0, height / 2.0
+            max_radius = ((center_x ** 2) + (center_y ** 2)) ** 0.5
 
-            center_x, center_y = width / 2, height / 2
-            max_radius = ((width / 2) ** 2 + (height / 2) ** 2) ** 0.5
+            y_coords, x_coords = np.ogrid[:height, :width]
+            dist = np.sqrt((x_coords - center_x) ** 2 + (y_coords - center_y) ** 2)
+            ratio = np.clip(dist / max_radius, 0.0, 1.0).astype(np.float32)
 
-            # 最初に全体を一番外側の色で塗りつぶし
-            outer_color = self._interpolate_gradient_color(colors, 1.0)
-            draw.rectangle([(0, 0), (width, height)], fill=outer_color + (255,))
+            segment_count = len(colors) - 1
+            colors_arr = np.array(colors, dtype=np.float32)
+            segment_ratios = ratio * segment_count
+            segment_indices = np.clip(segment_ratios.astype(np.int32), 0, segment_count - 1)
+            local_ratios = segment_ratios - segment_indices
 
-            # 半径方向に段階的に描画（200ステップで十分滑らか）
-            steps = min(200, int(max_radius))
-            for i in range(steps, 0, -1):
-                ratio = i / steps
-                color = self._interpolate_gradient_color(colors, ratio)
-                radius = int(max_radius * ratio)
+            start_colors = colors_arr[segment_indices]   # (H, W, 3)
+            end_colors = colors_arr[np.minimum(segment_indices + 1, segment_count)]
+            local_ratios_3d = local_ratios[:, :, np.newaxis]
 
-                # 円を描画
-                bbox = [
-                    int(center_x - radius), int(center_y - radius),
-                    int(center_x + radius), int(center_y + radius)
-                ]
-                draw.ellipse(bbox, fill=color + (255,))
+            rgb = (start_colors * (1 - local_ratios_3d) + end_colors * local_ratios_3d).astype(np.uint8)
+            alpha = np.full((height, width, 1), 255, dtype=np.uint8)
+            rgba = np.concatenate([rgb, alpha], axis=2)
 
-            return image
+            return Image.fromarray(rgba, 'RGBA')
         else:
             # 線形グラデーション（NumPy一括生成）
             return self._create_linear_gradient_numpy(

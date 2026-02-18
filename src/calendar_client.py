@@ -63,6 +63,8 @@ class CalendarClient:
         self.accounts = {}  # {account_id: {'service': service, 'email': str, 'color': str, 'display_name': str}}
         self._expired_accounts = {}  # {account_id: {'email': str, ...}} トークン期限切れアカウント
         self._local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+        self._events_cache: dict = {}  # {days: (monotonic_time, events)}
+        self._events_cache_ttl: int = 180  # キャッシュ有効期限（秒）
 
     @property
     def is_authenticated(self) -> bool:
@@ -726,9 +728,16 @@ class CalendarClient:
         """
         return list(self._expired_accounts.keys())
 
+    def invalidate_events_cache(self) -> None:
+        """イベントキャッシュを強制クリア（手動更新・アカウント変更時に呼び出す）"""
+        self._events_cache.clear()
+        logger.debug("イベントキャッシュをクリアしました")
+
     def get_all_events(self, days: int = 1) -> List[CalendarEvent]:
         """
         すべての有効なアカウントからイベントを取得して統合
+
+        TTLキャッシュ（デフォルト180秒）を使用し、同一引数での重複API呼び出しを抑制。
 
         Args:
             days: 取得する日数（デフォルト: 1 = 今日のみ）
@@ -736,6 +745,16 @@ class CalendarClient:
         Returns:
             List[CalendarEvent]: 統合されたイベント情報のリスト（時系列ソート済み）
         """
+        import time
+        now = time.monotonic()
+        _cache = getattr(self, '_events_cache', None)
+        _ttl = getattr(self, '_events_cache_ttl', 180)
+        if _cache is not None and days in _cache:
+            cached_time, cached_events = _cache[days]
+            if now - cached_time < _ttl:
+                logger.debug(f"イベントキャッシュヒット: {len(cached_events)}件（残り{_ttl - (now - cached_time):.0f}秒）")
+                return cached_events
+
         all_events = []
 
         for account_id, account_data in self.accounts.items():
@@ -760,6 +779,11 @@ class CalendarClient:
 
         # 時系列でソート
         all_events.sort(key=lambda e: e.start_datetime)
+
+        # キャッシュに保存
+        if not hasattr(self, '_events_cache'):
+            self._events_cache = {}
+        self._events_cache[days] = (now, all_events)
 
         logger.info(f"統合イベント取得: {len(all_events)}件（{len(self.accounts)}アカウント）")
         return all_events
