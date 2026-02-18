@@ -81,6 +81,9 @@ class MainWindow(QMainWindow):
         # 背景画像設定を復元
         self._restore_background_setting()
 
+        # 設定に基づいて自動更新を開始
+        self._restore_auto_update_setting()
+
         logger.info("MainWindowを初期化しました")
 
     def _setup_control_area(self, parent_layout):
@@ -399,6 +402,14 @@ class MainWindow(QMainWindow):
                 self.viewmodel.set_background_image(path)
                 custom_label = f"カスタム: {path.name}"
                 self._set_custom_combo_item(custom_label, f"custom:{bg_value}")
+
+    def _restore_auto_update_setting(self):
+        """起動時に保存済み設定に基づいて自動更新を開始"""
+        if self.settings_service.get("auto_update_enabled", True):
+            interval = self.settings_service.get("auto_update_interval_minutes", 60)
+            self.viewmodel.set_auto_update_interval(interval)
+            self.viewmodel.start_auto_update()
+            logger.info(f"自動更新を起動時に開始しました（間隔: {interval}分）")
 
     @pyqtSlot()
     def _on_update_started(self):

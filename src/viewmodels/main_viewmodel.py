@@ -96,6 +96,12 @@ class MainViewModel(ViewModelBase):
         self._midnight_timer.setSingleShot(True)
         self._midnight_timer.timeout.connect(self._on_midnight_timeout)
 
+        # 現在時刻インジケーター更新タイマー（週間カレンダーの「今の時刻」ラインを定期更新）
+        from src.config import TIME_INDICATOR_REFRESH_MINUTES
+        self._time_indicator_timer = QTimer(self)
+        self._time_indicator_timer.setInterval(TIME_INDICATOR_REFRESH_MINUTES * 60 * 1000)
+        self._time_indicator_timer.timeout.connect(self._on_time_indicator_timeout)
+
         logger.info("MainViewModelを初期化しました")
 
     @property
@@ -475,6 +481,7 @@ class MainViewModel(ViewModelBase):
         """自動更新を開始"""
         self._auto_update_timer.start()
         self._sleep_check_timer.start()
+        self._time_indicator_timer.start()
         self._last_check_time = datetime.now()
         self._last_seen_date = datetime.now().date()
         self._schedule_midnight_timer()
@@ -485,6 +492,7 @@ class MainViewModel(ViewModelBase):
         """自動更新を停止"""
         self._auto_update_timer.stop()
         self._sleep_check_timer.stop()
+        self._time_indicator_timer.stop()
         self._midnight_timer.stop()
         self.auto_update_status_changed.emit(False)
         logger.info("自動更新を停止しました")
@@ -534,6 +542,11 @@ class MainViewModel(ViewModelBase):
     def _on_auto_update_timeout(self):
         """自動更新タイマーのタイムアウト処理"""
         logger.info("自動更新タイマーが発火しました")
+        self.update_wallpaper()
+
+    def _on_time_indicator_timeout(self):
+        """現在時刻インジケーター更新タイマーのタイムアウト処理（週間カレンダーの時刻ラインを更新）"""
+        logger.debug("現在時刻リフレッシュタイマーが発火しました")
         self.update_wallpaper()
 
     def _on_sleep_check(self):
@@ -605,6 +618,8 @@ class MainViewModel(ViewModelBase):
             self._retry_timer.stop()
         if self._sleep_check_timer.isActive():
             self._sleep_check_timer.stop()
+        if self._time_indicator_timer.isActive():
+            self._time_indicator_timer.stop()
         if self._midnight_timer.isActive():
             self._midnight_timer.stop()
         if self._preview_debounce_timer.isActive():

@@ -112,12 +112,12 @@ class TestCalendarIconDrawing:
 
     @patch('src.image_generator.platform.system')
     @patch('pathlib.Path.exists')
-    def test_draw_calendar_icon_called_in_generation(self, mock_exists, mock_system):
+    def test_draw_calendar_icon_not_called_in_generation(self, mock_exists, mock_system):
         """
-        TDD: 壁紙生成時にアイコン描画メソッドが呼ばれることを確認
+        アイコンは壁紙右上に不要なので generate_wallpaper() では描画しないことを確認
 
         要件:
-        - generate_wallpaper()内で_draw_calendar_icon()が呼ばれる
+        - generate_wallpaper()内で_draw_calendar_icon()が呼ばれない（2026-02-18 削除済み）
         """
         # Setup
         mock_system.return_value = 'Darwin'
@@ -133,8 +133,8 @@ class TestCalendarIconDrawing:
                 week_events=[]
             )
 
-            # Assert: _draw_calendar_iconが呼ばれた
-            assert mock_draw_icon.called, "_draw_calendar_icon()が呼ばれていない"
+            # Assert: _draw_calendar_iconが呼ばれないこと（削除済み）
+            assert not mock_draw_icon.called, "_draw_calendar_icon()が呼ばれてはいけない"
 
     @patch('src.image_generator.platform.system')
     @patch('pathlib.Path.exists')

@@ -238,6 +238,9 @@ RETRY_INTERVAL_MINUTES = 5  # リトライ間隔（分）
 SLEEP_CHECK_INTERVAL_SECONDS = 60   # スリープ復帰チェック間隔（秒）
 SLEEP_WAKE_THRESHOLD_SECONDS = 120  # スリープ復帰と判定する閾値（秒）
 
+# === 現在時刻インジケーター更新設定 ===
+TIME_INDICATOR_REFRESH_MINUTES = 5  # 週間カレンダーの「現在時刻ライン」を更新する間隔（分）
+
 # === ログ設定 ===
 LOG_LEVEL = 'INFO'
 if getattr(sys, 'frozen', False):

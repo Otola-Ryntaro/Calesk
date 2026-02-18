@@ -65,6 +65,9 @@ class CalendarClient:
         self._local_tz = datetime.now(timezone.utc).astimezone().tzinfo
         self._events_cache: dict = {}  # {days: (monotonic_time, events)}
         self._events_cache_ttl: int = 180  # キャッシュ有効期限（秒）
+        # レガシー単一アカウントの色設定（accounts.jsonのlegacy_colorキーで永続化）
+        self._legacy_color: str = "#4285f4"
+        self._load_legacy_color()
 
     @property
     def is_authenticated(self) -> bool:
@@ -221,6 +224,39 @@ class CalendarClient:
             logger.error(f"イベント取得エラー: {e}")
             return []
 
+    def _load_legacy_color(self) -> None:
+        """accounts.jsonのlegacy_colorからレガシーアカウント色を読み込む"""
+        try:
+            config = self._load_accounts_config()
+            self._legacy_color = config.get('legacy_color', '#4285f4')
+        except Exception:
+            self._legacy_color = '#4285f4'
+
+    def update_legacy_color(self, color: str) -> bool:
+        """
+        レガシー単一アカウントのイベント表示色を更新し、accounts.jsonに永続化
+
+        Args:
+            color: カラーコード（#RRGGBB形式）
+
+        Returns:
+            bool: 成功でTrue
+        """
+        import re
+        if not re.match(r'^#[0-9a-fA-F]{6}$', color):
+            logger.warning(f"無効な色形式です: {color}")
+            return False
+        self._legacy_color = color
+        try:
+            config = self._load_accounts_config()
+            config['legacy_color'] = color
+            self._save_accounts_config(config)
+            logger.info(f"レガシーアカウントの色を変更しました: {color}")
+            return True
+        except Exception as e:
+            logger.error(f"レガシーアカウント色保存エラー: {e}")
+            return False
+
     def _parse_event(self, event: Dict, calendar_id: str) -> Optional[CalendarEvent]:
         """
         イベント情報を解析して必要な情報を抽出
@@ -262,7 +298,8 @@ class CalendarClient:
                 location=event.get('location', ''),
                 description=event.get('description', ''),
                 calendar_id=calendar_id,
-                color_id=event.get('colorId', '1')  # デフォルトカラー
+                color_id=event.get('colorId', '1'),  # デフォルトカラー
+                account_color=self._legacy_color,
             )
 
         except Exception as e:

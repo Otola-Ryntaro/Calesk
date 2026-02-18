@@ -307,9 +307,15 @@ class SettingsDialog(QDialog):
         selected = self.account_list_widget.currentItem()
         if selected:
             account_id = selected.data(Qt.ItemDataRole.UserRole)
-            self._calendar_client.remove_account(account_id)
-            logger.info(f"アカウントを削除しました: {account_id}")
+            if account_id == "legacy":
+                # レガシーアカウントはログアウト
+                self._calendar_client.logout()
+                logger.info("レガシーアカウントからログアウトしました")
+            else:
+                self._calendar_client.remove_account(account_id)
+                logger.info(f"アカウントを削除しました: {account_id}")
             self.refresh_account_list()
+            self._update_auth_status()
 
     def _on_change_color(self):
         """色変更ボタンクリック"""
@@ -321,9 +327,12 @@ class SettingsDialog(QDialog):
             account_id = selected.data(Qt.ItemDataRole.UserRole)
             color = QColorDialog.getColor()
             if color.isValid():
-                success = self._calendar_client.update_account_color(
-                    account_id, color.name()
-                )
+                if account_id == "legacy":
+                    success = self._calendar_client.update_legacy_color(color.name())
+                else:
+                    success = self._calendar_client.update_account_color(
+                        account_id, color.name()
+                    )
                 if success:
                     logger.info(f"アカウント色を変更しました: {account_id} -> {color.name()}")
                 self.refresh_account_list()
@@ -335,17 +344,22 @@ class SettingsDialog(QDialog):
 
         self.account_list_widget.clear()
 
-        # CalendarClient.accountsからアカウント情報を取得
+        # マルチアカウント（accounts.json登録済み）を表示
         for account_id, account_data in self._calendar_client.accounts.items():
             email = account_data.get('email', account_id)
             display_name = account_data.get('display_name', email)
             color = account_data.get('color', '#4285f4')
 
-            # リストアイテム作成
             item_text = f"{display_name} ({email})"
             item = QListWidgetItem(item_text)
             item.setData(Qt.ItemDataRole.UserRole, account_id)
+            self.account_list_widget.addItem(item)
 
+        # マルチアカウント未登録 & レガシー認証済みの場合はレガシーエントリを表示
+        if not self._calendar_client.accounts and self._calendar_client.is_authenticated:
+            color = self._calendar_client._legacy_color
+            item = QListWidgetItem(f"メインアカウント（ログイン済み）  色: {color}")
+            item.setData(Qt.ItemDataRole.UserRole, "legacy")
             self.account_list_widget.addItem(item)
 
     def _on_auto_update_toggled(self, state):

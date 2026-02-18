@@ -393,9 +393,6 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
             # 週間カレンダー描画
             self._draw_week_calendar(draw, week_events, week_calendar_y_start, image=image)
 
-            # Google Calendarアイコン描画
-            self._draw_calendar_icon(image, draw)
-
             # RGBAからRGBに変換（PNG保存用）
             if image.mode == 'RGBA':
                 rgb_image = Image.new('RGB', (self.width, self.height), (255, 255, 255))
