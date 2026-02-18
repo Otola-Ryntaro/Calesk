@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QListWidgetItem, QInputDialog, QColorDialog, QProgressDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap, QIcon, QColor
 
 from ..viewmodels.settings_service import SettingsService
 
@@ -337,6 +338,14 @@ class SettingsDialog(QDialog):
                     logger.info(f"アカウント色を変更しました: {account_id} -> {color.name()}")
                 self.refresh_account_list()
 
+    @staticmethod
+    def _make_color_icon(hex_color: str) -> QIcon:
+        """16×16の色スウォッチアイコンを生成"""
+        pixmap = QPixmap(16, 16)
+        q_color = QColor(hex_color) if isinstance(hex_color, str) else QColor('#4285f4')
+        pixmap.fill(q_color)
+        return QIcon(pixmap)
+
     def refresh_account_list(self):
         """アカウント一覧を更新"""
         if not self._calendar_client:
@@ -350,15 +359,16 @@ class SettingsDialog(QDialog):
             display_name = account_data.get('display_name', email)
             color = account_data.get('color', '#4285f4')
 
-            item_text = f"{display_name} ({email})"
-            item = QListWidgetItem(item_text)
+            item = QListWidgetItem(f"{display_name} ({email})")
+            item.setIcon(self._make_color_icon(color))
             item.setData(Qt.ItemDataRole.UserRole, account_id)
             self.account_list_widget.addItem(item)
 
         # マルチアカウント未登録 & レガシー認証済みの場合はレガシーエントリを表示
         if not self._calendar_client.accounts and self._calendar_client.is_authenticated:
             color = self._calendar_client._legacy_color
-            item = QListWidgetItem(f"メインアカウント（ログイン済み）  色: {color}")
+            item = QListWidgetItem("メインアカウント（ログイン済み）")
+            item.setIcon(self._make_color_icon(color))
             item.setData(Qt.ItemDataRole.UserRole, "legacy")
             self.account_list_widget.addItem(item)
 

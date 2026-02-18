@@ -289,9 +289,8 @@ class CalendarRendererMixin:
         for i, event in enumerate(display_events):
             y = y_start + i * (bar_height + bar_margin)
 
-            # イベント色を取得
-            color_id = event.color_id
-            bar_color = self._get_event_color(color_id)
+            # アカウント色を使用（_parse_hex_color は EffectsRendererMixin で定義済み）
+            bar_color = self._parse_hex_color(event.account_color)
 
             # バーの開始・終了日を計算（表示範囲: today〜today+6）
             event_start = event.start_datetime.date()
@@ -532,9 +531,8 @@ class CalendarRendererMixin:
             block_x = column_x + pos['x_offset'] + 2
             block_width = pos['width'] - 4
 
-            # イベントブロック描画
-            color_id = event.color_id
-            block_color = self._get_event_color(color_id)
+            # イベントブロック描画（アカウント色を使用）
+            block_color = self._parse_hex_color(event.account_color)
 
             draw.rectangle(
                 [(block_x, y1), (block_x + block_width, y2)],
