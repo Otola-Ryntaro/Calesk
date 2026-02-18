@@ -10,9 +10,10 @@ from PyQt6.QtWidgets import (
     QLabel, QComboBox, QPushButton, QProgressBar, QMessageBox, QFileDialog, QDialog,
     QSystemTrayIcon, QMenu, QApplication
 )
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, QSize, pyqtSlot
 from pathlib import Path
 import logging
+import sys
 
 from src.ui.widgets.preview_widget import PreviewWidget
 from src.ui.settings_dialog import SettingsDialog
@@ -503,13 +504,8 @@ class MainWindow(QMainWindow):
         # トレイアイコンを作成
         self._tray_icon = QSystemTrayIcon(self)
 
-        # カスタムトレイアイコンを設定（なければシステムデフォルト）
-        from PyQt6.QtGui import QIcon
-        tray_icon_path = Path(__file__).parent.parent.parent / 'assets' / 'tray_icon_32.png'
-        if tray_icon_path.exists():
-            self._tray_icon.setIcon(QIcon(str(tray_icon_path)))
-        else:
-            self._tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+        # ダーク/ライトモードに合わせたC字型カレンダーアイコンを設定
+        self._tray_icon.setIcon(self._tray_icon_for_appearance())
 
         # トレイメニューを作成
         tray_menu = QMenu(self)
@@ -543,6 +539,42 @@ class MainWindow(QMainWindow):
         self._tray_icon.show()
 
         logger.info("システムトレイアイコンを初期化しました")
+
+    @staticmethod
+    def _is_dark_mode() -> bool:
+        """macOSのダークモード判定（defaultsコマンド使用）"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['defaults', 'read', '-g', 'AppleInterfaceStyle'],
+                capture_output=True, text=True
+            )
+            return result.returncode == 0 and 'Dark' in result.stdout
+        except Exception:
+            return False
+
+    def _tray_icon_for_appearance(self) -> 'QIcon':
+        """ダーク/ライトモードに合わせたトレイアイコンを返す"""
+        from PyQt6.QtGui import QIcon
+        assets = Path(__file__).parent.parent.parent / 'assets'
+        if sys.platform == 'darwin' and self._is_dark_mode():
+            icon_1x = assets / 'icon_menubar_white.png'
+            icon_2x = assets / 'icon_menubar_white@2x.png'
+        else:
+            icon_1x = assets / 'icon_menubar.png'
+            icon_2x = assets / 'icon_menubar@2x.png'
+
+        if icon_1x.exists():
+            icon = QIcon()
+            icon.addFile(str(icon_1x), QSize(22, 22))
+            if icon_2x.exists():
+                icon.addFile(str(icon_2x), QSize(44, 44))
+            return icon
+        # フォールバック
+        old_path = assets / 'tray_icon_32.png'
+        if old_path.exists():
+            return QIcon(str(old_path))
+        return self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon)
 
     def _on_tray_icon_activated(self, reason):
         """
