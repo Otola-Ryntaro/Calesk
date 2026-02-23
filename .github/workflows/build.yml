@@ -32,16 +32,6 @@ jobs:
         run: |
           pyinstaller Calesk.spec --clean --noconfirm
 
-      - name: Ad-hoc sign macOS app
-        run: |
-          # --deep はQtフレームワーク内シンボルを破壊するため使わない
-          # 内部バイナリを個別に署名してからアプリ全体を署名する
-          find dist/Calesk.app -name "*.dylib" -o -name "*.so" | \
-            xargs -I{} codesign --force --sign - {}
-          find dist/Calesk.app/Contents/MacOS -type f | \
-            xargs -I{} codesign --force --sign - {}
-          codesign --force --sign - dist/Calesk.app
-
       - name: Create DMG
         run: |
           mkdir -p dist/dmg_staging
