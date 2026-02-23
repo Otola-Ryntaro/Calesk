@@ -114,6 +114,12 @@ class MainWindow(QMainWindow):
         self.settings_button.clicked.connect(self._on_settings_clicked)
         control_layout.addWidget(self.settings_button)
 
+        # 「プレビュー更新」ボタン
+        self.refresh_button = QPushButton("プレビュー更新")
+        self.refresh_button.setObjectName("refresh_button")
+        self.refresh_button.clicked.connect(self._on_refresh_preview_clicked)
+        control_layout.addWidget(self.refresh_button)
+
         # 「壁紙に適用」ボタン
         self.apply_button = QPushButton("壁紙に適用")
         self.apply_button.setObjectName("apply_button")
@@ -288,6 +294,13 @@ class MainWindow(QMainWindow):
                 logger.error("設定の保存に失敗しました")
             # ViewModelに設定変更を通知
             self.viewmodel.on_settings_changed(new_settings)
+
+    @pyqtSlot()
+    def _on_refresh_preview_clicked(self):
+        """「プレビュー更新」ボタンがクリックされたときの処理"""
+        self.statusBar().showMessage("プレビューを更新中...")
+        self.viewmodel.preview_theme(self.viewmodel.current_theme)
+        logger.info("プレビュー更新をリクエストしました")
 
     @pyqtSlot()
     def _on_apply_clicked(self):

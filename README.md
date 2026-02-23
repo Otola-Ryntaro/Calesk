@@ -6,6 +6,12 @@ Google Calendarの予定をデスクトップ壁紙として表示するPython�
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.6.1-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
+---
+
+> 🇬🇧 **English summary below** · [Jump to English section](#english)
+
+---
+
 ## 概要
 
 Google Calendarと連携し、今日と今週の予定を壁紙として自動生成・設定するデスクトップアプリケーションです。7種類のテーマ、複数Googleアカウント対応、自動更新、カスタム背景画像など多彩な機能を備えています。
@@ -30,10 +36,32 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 
 | OS | ダウンロードファイル | 起動方法 |
 | --- | --- | --- |
-| macOS | `Calesk-macOS.zip` | 展開 → 右クリック →「開く」 |
+| macOS | `Calesk-macOS.dmg` | DMGをマウント → Calesk.app を Applications にドラッグ |
 | Windows | `Calesk-Windows.zip` | 展開 → `Calesk.exe` をダブルクリック |
 
 > 詳細は [USER_GUIDE.md](USER_GUIDE.md) を参照してください。
+
+#### macOS：初回起動時の警告について
+
+コード署名なしのため、初回起動時に「開発元を確認できない」と表示される場合があります。
+
+```text
+右クリック（または Control+クリック）→「開く」→「開く」ボタンをクリック
+```
+
+または、ターミナルで以下を実行:
+
+```bash
+xattr -cr /Applications/Calesk.app
+```
+
+#### Windows：SmartScreen 警告について
+
+初回実行時に「Windows によって PC が保護されました」と表示される場合があります。
+
+```text
+「詳細情報」→「実行」をクリック
+```
 
 ### 開発者向けインストール（Python環境）
 
@@ -142,7 +170,7 @@ source venv/bin/activate && python -m pytest tests/ -v --tb=short
 python -m pytest tests/ --cov=src --cov-report=html
 ```
 
-テスト数: 614件
+テスト数: 669件
 
 ## アーキテクチャ
 
@@ -236,3 +264,67 @@ MIT License © 2026 音良林太郎
 ## サポート
 
 問題が発生した場合は、[Issues](../../issues)で報告してください。
+
+---
+
+## English
+
+### What is Calesk?
+
+**Calesk** automatically generates your desktop wallpaper from Google Calendar events — showing today's schedule and the week ahead, updated in the background.
+
+### Features
+
+- Syncs with Google Calendar via OAuth2 (read-only, multiple accounts supported)
+- 7 visual themes: simple, modern, pastel, dark, vibrant, luxury, playful
+- Weekly calendar grid with current-time indicator
+- Custom background images or gradient backgrounds
+- Auto-refresh as a menu bar / system tray resident app
+- macOS & Windows support
+
+### Installation (no Python required)
+
+Download the latest release from the [Releases](../../releases) page.
+
+| OS | File | How to open |
+| --- | --- | --- |
+| macOS | `Calesk-macOS.dmg` | Mount DMG → drag Calesk.app to Applications |
+| Windows | `Calesk-Windows.zip` | Extract → double-click `Calesk.exe` |
+
+#### macOS: Security warning (Gatekeeper)
+
+Because this app is not code-signed, macOS may show *"cannot be opened because the developer cannot be verified"*.
+
+**Fix:** Right-click (or Control+click) the app → **Open** → click **Open**.
+
+Or run this in Terminal:
+
+```bash
+xattr -cr /Applications/Calesk.app
+```
+
+#### Windows: SmartScreen warning
+
+Windows may show *"Windows protected your PC"* on first launch.
+
+**Fix:** Click **More info** → **Run anyway**.
+
+### Google Calendar Setup (required for all users)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project
+2. Enable the **Google Calendar API**
+3. Configure the OAuth consent screen; add your Gmail address as a test user
+4. Create an **OAuth 2.0 Client ID** (Desktop application type)
+5. Download `credentials.json` and place it in the `credentials/` directory
+6. On first run, authenticate via the browser
+
+> See [USER_GUIDE.md](USER_GUIDE.md) for step-by-step screenshots.
+
+### Privacy
+
+Calesk only communicates with **Google Calendar API**. No data is sent to any other server.
+The OAuth scope is `calendar.readonly` — the app cannot create, edit, or delete events.
+
+### License
+
+MIT License © 2026 [音良林太郎](https://x.com/Otola_ryntaro)

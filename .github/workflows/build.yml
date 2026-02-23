@@ -32,16 +32,30 @@ jobs:
         run: |
           pyinstaller Calesk.spec --clean --noconfirm
 
-      - name: Create ZIP archive
+      - name: Create DMG
         run: |
-          cd dist
-          zip -r Calesk-macOS.zip Calesk.app
+          mkdir -p dist/dmg_staging
+          cp -r dist/Calesk.app dist/dmg_staging/
+          ln -s /Applications dist/dmg_staging/Applications
+
+          hdiutil create \
+            -volname "Calesk" \
+            -srcfolder dist/dmg_staging \
+            -ov \
+            -format UDRW \
+            dist/Calesk-rw.dmg
+
+          hdiutil convert dist/Calesk-rw.dmg \
+            -format UDZO \
+            -o dist/Calesk-macOS.dmg
+
+          rm -rf dist/dmg_staging dist/Calesk-rw.dmg
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: Calesk-macOS
-          path: dist/Calesk-macOS.zip
+          path: dist/Calesk-macOS.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -93,6 +107,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/Calesk-macOS.zip
+            artifacts/Calesk-macOS.dmg
             artifacts/Calesk-Windows.zip
           generate_release_notes: true

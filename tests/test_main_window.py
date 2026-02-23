@@ -152,6 +152,20 @@ class TestMainWindow:
         # モックのapply_wallpaperが呼ばれることを確認
         mock_viewmodel.apply_wallpaper.assert_called_once()
 
+    def test_main_window_has_refresh_button(self, window_with_mock):
+        """「プレビュー更新」ボタンが存在することを確認"""
+        button = window_with_mock.findChild(QPushButton, "refresh_button")
+        assert button is not None
+        assert button.text() == "プレビュー更新"
+
+    def test_refresh_button_click(self, qtbot, window_with_mock, mock_viewmodel):
+        """「プレビュー更新」ボタンをクリックするとpreview_themeが呼ばれることを確認"""
+        button = window_with_mock.findChild(QPushButton, "refresh_button")
+        assert button.isEnabled()
+
+        qtbot.mouseClick(button, Qt.MouseButton.LeftButton)
+        mock_viewmodel.preview_theme.assert_called()
+
     def test_main_window_has_progress_bar(self, window_with_mock):
         """QProgressBarが存在することを確認"""
         progress_bar = window_with_mock.findChild(QProgressBar, "progress_bar")

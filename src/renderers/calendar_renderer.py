@@ -1,6 +1,7 @@
 """
 週間カレンダー描画Mixin
 週間グリッド、時刻ラベル、イベントブロック、複数日イベントバー、イベント配置計算
+時間外（早朝・深夜）イベントのインジケーター表示
 """
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -14,6 +15,9 @@ from ..config import (
     DEFAULT_EVENT_COLORS,
     LABEL_VISIBILITY_MODE,
 )
+
+# 時間外ストリップの高さ（px）
+OFF_HOURS_STRIP_HEIGHT = 20
 
 
 class CalendarRendererMixin:
@@ -409,6 +413,11 @@ class CalendarRendererMixin:
         header_height = self.layout['header_height']
         grid_y_start = self.layout['grid_y_start']
 
+        # 時間外イベントを収集（早朝・深夜）
+        before_events, after_events = self._get_off_hours_events(all_events, today)
+        has_before = any(v for v in before_events.values())
+        has_after = any(v for v in after_events.values())
+
         # 複数日イベント横バーを描画（グリッドの上部）
         multi_day_events = self._get_multi_day_events(all_events, today)
         if multi_day_events:
@@ -416,6 +425,11 @@ class CalendarRendererMixin:
                 draw, multi_day_events, start_x, grid_y_start, today
             )
             grid_y_start += bar_height
+
+        # 早朝イベントストリップ（グリッド上端）
+        if has_before:
+            self._draw_off_hours_strip(draw, before_events, start_x, grid_y_start)
+            grid_y_start += OFF_HOURS_STRIP_HEIGHT
 
         # カレンダーグリッドの背景（テーマに応じた色）
         # card_bgがRGBAの場合、RGBのみ使用
@@ -492,6 +506,12 @@ class CalendarRendererMixin:
             if day_events:
                 column_x = start_x + day_offset * DAY_COLUMN_WIDTH
                 self._draw_day_events(draw, day_events, column_x, grid_y_start)
+
+        # 深夜イベントストリップ（グリッド下端）
+        if has_after:
+            self._draw_off_hours_strip(
+                draw, after_events, start_x, grid_y_start + calendar_height
+            )
 
     def _draw_day_events(
         self,
@@ -704,3 +724,95 @@ class CalendarRendererMixin:
                 self.theme['event_colors'].get('1', DEFAULT_EVENT_COLORS['1'])
             )
         return DEFAULT_EVENT_COLORS.get(color_id, DEFAULT_EVENT_COLORS['1'])
+
+    def _get_off_hours_events(
+        self,
+        events: List[CalendarEvent],
+        today
+    ) -> Tuple[Dict[int, List[CalendarEvent]], Dict[int, List[CalendarEvent]]]:
+        """
+        表示時間範囲外（早朝・深夜）のイベントを日別に収集
+
+        Args:
+            events: 全イベントリスト
+            today: 基準日（date型）
+
+        Returns:
+            (before_events, after_events): {day_offset: [CalendarEvent, ...]}
+            before_events: WEEK_CALENDAR_START_HOUR より前に終了するイベント
+            after_events: WEEK_CALENDAR_END_HOUR より後に開始するイベント
+        """
+        before_events: Dict[int, List[CalendarEvent]] = {i: [] for i in range(7)}
+        after_events: Dict[int, List[CalendarEvent]] = {i: [] for i in range(7)}
+
+        for event in events:
+            if event.is_all_day:
+                continue
+
+            day_offset = (event.start_datetime.date() - today).days
+            if not (0 <= day_offset < 7):
+                continue
+
+            start_hour = event.start_datetime.hour + event.start_datetime.minute / 60
+            end_hour = event.end_datetime.hour + event.end_datetime.minute / 60
+
+            if end_hour <= WEEK_CALENDAR_START_HOUR:
+                # グリッド開始前に終了する早朝イベント
+                before_events[day_offset].append(event)
+            elif start_hour >= WEEK_CALENDAR_END_HOUR:
+                # グリッド終了後に開始する深夜イベント
+                after_events[day_offset].append(event)
+
+        return before_events, after_events
+
+    def _draw_off_hours_strip(
+        self,
+        draw: ImageDraw.ImageDraw,
+        events_by_day: Dict[int, List[CalendarEvent]],
+        start_x: int,
+        y: int
+    ):
+        """
+        時間外イベントのインジケーターストリップを描画
+
+        各日カラムに最大4つの色付きドットを表示する。
+        イベントが5件以上の場合は "+n" テキストで補完。
+
+        Args:
+            draw: ImageDraw オブジェクト
+            events_by_day: {day_offset: [CalendarEvent, ...]} の辞書
+            start_x: カレンダー開始X座標
+            y: ストリップの上端Y座標
+        """
+        dot_size = 8
+        dot_margin = 3
+        max_dots = 4
+
+        for day_offset, day_events in events_by_day.items():
+            if not day_events:
+                continue
+
+            col_x = start_x + day_offset * DAY_COLUMN_WIDTH
+            dot_y = y + (OFF_HOURS_STRIP_HEIGHT - dot_size) // 2
+
+            # 最大 max_dots 個のドットを描画
+            display_events = day_events[:max_dots]
+            for i, event in enumerate(display_events):
+                dot_x = col_x + 3 + i * (dot_size + dot_margin)
+                color = self._parse_hex_color(event.account_color)
+                draw.ellipse(
+                    [(dot_x, dot_y), (dot_x + dot_size, dot_y + dot_size)],
+                    fill=color
+                )
+
+            # 表示しきれない件数を "+n" で補完
+            remaining = len(day_events) - max_dots
+            if remaining > 0:
+                text_x = col_x + 3 + max_dots * (dot_size + dot_margin)
+                text_color = self.theme.get('text_color', (100, 100, 100))
+                draw.text(
+                    (text_x, dot_y),
+                    f"+{remaining}",
+                    font=self.font_hour_label,
+                    fill=text_color
+                )

@@ -84,6 +84,7 @@ project-setup.md
 claudedocs/
 daily_report/
 Screenshots/
+Image/
 
 # macOS launchd settings (contain local paths)
 *.plist
