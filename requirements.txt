@@ -9,6 +9,7 @@ python-dotenv==1.0.0
 
 # GUI Framework (Phase 8)
 PyQt6==6.6.1
+PyQt6-Qt6==6.6.1
 
 # Testing
 pytest-qt==4.2.0
