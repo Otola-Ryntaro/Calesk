@@ -35,6 +35,10 @@ env/
 *.swp
 *.swo
 *~
+.agent/
+.agents/
+.cursor/
+.trae/
 
 # Google API Credentials
 credentials/
