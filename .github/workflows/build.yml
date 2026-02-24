@@ -19,9 +19,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner: macos-13
+          - runner: macos-15-intel
             artifact_suffix: Intel
-          - runner: macos-14
+          - runner: macos-15
             artifact_suffix: AppleSilicon
     runs-on: ${{ matrix.runner }}
     steps:
