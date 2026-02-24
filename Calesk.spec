@@ -74,6 +74,10 @@ app = BUNDLE(
         'CFBundleShortVersionString': '1.0.0',
         'NSHighResolutionCapable': True,
         'NSSupportsAutomaticGraphicsSwitching': True,
+        # Qt6 の permission 初期化で参照される可能性があるため明示
+        'NSLocationUsageDescription': 'Calesk does not use your location. This key is present for Qt compatibility.',
+        'NSLocationWhenInUseUsageDescription': 'Calesk does not use your location. This key is present for Qt compatibility.',
+        'NSLocationAlwaysAndWhenInUseUsageDescription': 'Calesk does not use your location. This key is present for Qt compatibility.',
         # GUIアプリとして通常起動できるようにDock表示を有効化
         'LSUIElement': False,
     },
