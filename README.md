@@ -36,7 +36,9 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 
 | OS | ダウンロードファイル | 起動方法 |
 | --- | --- | --- |
-| macOS | `Calesk-macOS.dmg` | DMGをマウント → Calesk.app を Applications にドラッグ |
+| macOS (Apple Silicon) | `Calesk-macOS-AppleSilicon.dmg` | DMGをマウント → Calesk.app を Applications にドラッグ |
+| macOS (Intel) | `Calesk-macOS-Intel.dmg` | DMGをマウント → Calesk.app を Applications にドラッグ |
+| macOS (互換用) | `Calesk-macOS.dmg` | 既存リンク互換（Intel版） |
 | Windows | `Calesk-Windows.zip` | 展開 → `Calesk.exe` をダブルクリック |
 
 > 詳細は [USER_GUIDE.md](USER_GUIDE.md) を参照してください。
@@ -288,7 +290,9 @@ Download the latest release from the [Releases](https://github.com/Otola-Ryntaro
 
 | OS | File | How to open |
 | --- | --- | --- |
-| macOS | `Calesk-macOS.dmg` | Mount DMG → drag Calesk.app to Applications |
+| macOS (Apple Silicon) | `Calesk-macOS-AppleSilicon.dmg` | Mount DMG → drag Calesk.app to Applications |
+| macOS (Intel) | `Calesk-macOS-Intel.dmg` | Mount DMG → drag Calesk.app to Applications |
+| macOS (legacy) | `Calesk-macOS.dmg` | Backward-compatible alias (Intel build) |
 | Windows | `Calesk-Windows.zip` | Extract → double-click `Calesk.exe` |
 
 #### macOS: Security warning (Gatekeeper)

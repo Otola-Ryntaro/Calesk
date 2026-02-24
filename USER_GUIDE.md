@@ -24,8 +24,11 @@ Pythonのインストールは不要です。
 
 ### macOS
 
-1. [Releases](https://github.com/Otola-Ryntaro/Calesk/releases) ページから最新の `Calesk-macOS.dmg` をダウンロード
-2. ZIPファイルをダブルクリックして展開
+1. [Releases](https://github.com/Otola-Ryntaro/Calesk/releases) ページから自分のMacに合うDMGをダウンロード
+   - Apple Silicon（M1/M2/M3）: `Calesk-macOS-AppleSilicon.dmg`
+   - Intel Mac: `Calesk-macOS-Intel.dmg`
+   - `Calesk-macOS.dmg` は互換用（Intel版）
+2. DMGファイルをダブルクリックしてマウント
 3. `Calesk.app` を「アプリケーション」フォルダにドラッグ&ドロップ
 
 **初回起動時の注意（macOS Gatekeeper）**:

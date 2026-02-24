@@ -68,6 +68,7 @@ htmlcov/
 
 # Build artifacts (PyInstaller)
 # Note: *.spec files are tracked (needed for build)
+*.dmg
 
 # Icon source / intermediate files
 assets/Whisk_*.jpeg

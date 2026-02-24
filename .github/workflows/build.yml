@@ -16,7 +16,16 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13
+            pyinstaller_arch: x86_64
+            artifact_suffix: Intel
+          - runner: macos-14
+            pyinstaller_arch: arm64
+            artifact_suffix: AppleSilicon
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +41,11 @@ jobs:
 
       - name: Build macOS app
         run: |
-          pyinstaller Calesk.spec --clean --noconfirm
+          pyinstaller Calesk.spec --clean --noconfirm --target-arch ${{ matrix.pyinstaller_arch }}
+
+      - name: Verify macOS binary architecture
+        run: |
+          file dist/Calesk.app/Contents/MacOS/Calesk
 
       - name: Create DMG
         run: |
@@ -49,15 +62,15 @@ jobs:
 
           hdiutil convert dist/Calesk-rw.dmg \
             -format UDZO \
-            -o dist/Calesk-macOS.dmg
+            -o dist/Calesk-macOS-${{ matrix.artifact_suffix }}.dmg
 
           rm -rf dist/dmg_staging dist/Calesk-rw.dmg
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Calesk-macOS
-          path: dist/Calesk-macOS.dmg
+          name: Calesk-macOS-${{ matrix.artifact_suffix }}
+          path: dist/Calesk-macOS-${{ matrix.artifact_suffix }}.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -96,7 +109,13 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: Calesk-macOS
+          name: Calesk-macOS-Intel
+          path: artifacts/
+
+      - name: Download macOS artifact (Apple Silicon)
+        uses: actions/download-artifact@v4
+        with:
+          name: Calesk-macOS-AppleSilicon
           path: artifacts/
 
       - name: Download Windows artifact
@@ -105,10 +124,15 @@ jobs:
           name: Calesk-Windows
           path: artifacts/
 
+      - name: Prepare legacy macOS filename
+        run: |
+          cp artifacts/Calesk-macOS-Intel.dmg artifacts/Calesk-macOS.dmg
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/Calesk-macOS.dmg
+            artifacts/Calesk-macOS-Intel.dmg
+            artifacts/Calesk-macOS-AppleSilicon.dmg
             artifacts/Calesk-Windows.zip
           generate_release_notes: true
