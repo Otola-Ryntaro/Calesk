@@ -508,20 +508,21 @@ class TestGetTodayEvents:
         mock_datetime.fromisoformat = datetime.fromisoformat
         mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
-        # 前日23:00開始、当日01:00終了のイベント
-        # Google Calendar APIは timeMin/timeMax の範囲と重なるイベントを返す
+        # 前日23:30開始、当日00:30終了のイベント（UTC基準で夜0時跨ぎ）
+        # UTC+00:00 を使うことで CI(UTC)・ローカル(JST) 問わず同じ動作を保証する
+        # astimezone() 後: UTC系 → 2/4 23:30 ～ 2/5 00:30、JST系 → 2/5 08:30 ～ 09:30
         api_events = [
             {
                 'id': 'overnight_event',
                 'summary': '深夜作業',
-                'start': {'dateTime': '2026-02-04T23:00:00+09:00'},
-                'end': {'dateTime': '2026-02-05T01:00:00+09:00'}
+                'start': {'dateTime': '2026-02-04T23:30:00+00:00'},
+                'end': {'dateTime': '2026-02-05T00:30:00+00:00'}
             },
             {
                 'id': 'normal_event',
                 'summary': '朝のミーティング',
-                'start': {'dateTime': '2026-02-05T09:00:00+09:00'},
-                'end': {'dateTime': '2026-02-05T10:00:00+09:00'}
+                'start': {'dateTime': '2026-02-05T09:00:00+00:00'},
+                'end': {'dateTime': '2026-02-05T10:00:00+00:00'}
             }
         ]
 
