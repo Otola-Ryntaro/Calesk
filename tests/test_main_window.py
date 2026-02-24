@@ -724,6 +724,13 @@ class TestMainWindowAutoUpdateUI:
 class TestSystemTrayIcon:
     """システムトレイアイコン機能のテスト"""
 
+    @pytest.fixture(autouse=True)
+    def skip_if_no_system_tray(self):
+        """ヘッドレス環境など、システムトレイが利用できない場合はスキップ"""
+        from PyQt6.QtWidgets import QSystemTrayIcon
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            pytest.skip("システムトレイが利用できない環境のためスキップ")
+
     def test_tray_icon_initialized(self, window_with_mock):
         """トレイアイコンが初期化されること"""
         from PyQt6.QtWidgets import QSystemTrayIcon
