@@ -20,10 +20,8 @@ jobs:
       matrix:
         include:
           - runner: macos-13
-            pyinstaller_arch: x86_64
             artifact_suffix: Intel
           - runner: macos-14
-            pyinstaller_arch: arm64
             artifact_suffix: AppleSilicon
     runs-on: ${{ matrix.runner }}
     steps:
@@ -41,7 +39,7 @@ jobs:
 
       - name: Build macOS app
         run: |
-          pyinstaller Calesk.spec --clean --noconfirm --target-arch ${{ matrix.pyinstaller_arch }}
+          pyinstaller Calesk.spec --clean --noconfirm
 
       - name: Verify macOS binary architecture
         run: |
