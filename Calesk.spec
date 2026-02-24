@@ -74,6 +74,7 @@ app = BUNDLE(
         'CFBundleShortVersionString': '1.0.0',
         'NSHighResolutionCapable': True,
         'NSSupportsAutomaticGraphicsSwitching': True,
-        'LSUIElement': True,  # 常駐アプリのため Dock アイコンを非表示
+        # GUIアプリとして通常起動できるようにDock表示を有効化
+        'LSUIElement': False,
     },
 )
