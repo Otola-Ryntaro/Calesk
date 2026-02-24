@@ -14,6 +14,7 @@ from ..config import (
     CARD_SHADOW_ENABLED, DEFAULT_PRESET_BACKGROUND,
     BACKGROUND_CROP_POSITION,
 )
+from ..security_utils import ensure_private_dir, secure_file_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class SettingsService:
     def save(self) -> bool:
         """設定をJSONファイルに保存。成功時True、失敗時Falseを返す"""
         try:
-            self.settings_dir.mkdir(parents=True, exist_ok=True)
+            ensure_private_dir(self.settings_dir)
 
             # デフォルトから変更された値のみ保存
             changed = {
@@ -95,6 +96,7 @@ class SettingsService:
                 json.dumps(changed, ensure_ascii=False, indent=2),
                 encoding="utf-8"
             )
+            secure_file_permissions(self.settings_file)
             logger.info(f"設定を保存しました: {self.settings_file}")
             return True
         except Exception as e:

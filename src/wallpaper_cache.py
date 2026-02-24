@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from .security_utils import ensure_private_dir, secure_file_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class WallpaperCache:
         else:
             self._cache_dir = cache_dir
 
-        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        ensure_private_dir(self._cache_dir)
 
     @property
     def meta_path(self) -> Path:
@@ -49,6 +50,7 @@ class WallpaperCache:
         }
         try:
             self.meta_path.write_text(json.dumps(meta, ensure_ascii=False))
+            secure_file_permissions(self.meta_path)
             logger.info(f"壁紙キャッシュを保存しました: {wallpaper_path}")
         except Exception as e:
             logger.error(f"キャッシュ保存エラー: {e}")

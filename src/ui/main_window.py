@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
 
         # SettingsServiceの初期化
         self.settings_service = settings_service or SettingsService()
+        self.settings_service.load()
 
         # 中央ウィジェットを作成
         central_widget = QWidget()
@@ -74,6 +75,9 @@ class MainWindow(QMainWindow):
 
         # ViewModelとの接続
         self._connect_viewmodel()
+
+        # 保存済みテーマを先に反映（プレビュー/背景復元より先）
+        self._restore_theme_setting()
 
         # システムトレイアイコンの初期化
         self._setup_tray_icon()
@@ -242,6 +246,8 @@ class MainWindow(QMainWindow):
             theme_name (str): 新しいテーマ名
         """
         self.viewmodel.set_theme(theme_name)
+        self.settings_service.set("theme", theme_name)
+        self.settings_service.save()
         # プレビュー画像を生成（壁紙は適用しない）
         self.statusBar().showMessage(f"プレビュー生成中: {theme_name}")
         self.viewmodel.preview_theme(theme_name)
@@ -313,7 +319,11 @@ class MainWindow(QMainWindow):
         self.apply_button.setEnabled(False)
 
         # ViewModelに壁紙適用を依頼
-        self.viewmodel.apply_wallpaper()
+        started = self.viewmodel.apply_wallpaper()
+        if not started:
+            self.apply_button.setEnabled(True)
+            self.statusBar().showMessage("壁紙適用を開始できませんでした。再試行してください。")
+            logger.warning("壁紙適用の開始に失敗しました")
 
     def _on_background_combo_changed(self, index: int):
         """背景画像コンボボックスの選択変更"""
@@ -415,6 +425,17 @@ class MainWindow(QMainWindow):
                 self.viewmodel.set_background_image(path)
                 custom_label = f"カスタム: {path.name}"
                 self._set_custom_combo_item(custom_label, f"custom:{bg_value}")
+
+    def _restore_theme_setting(self):
+        """起動時に保存済みテーマを復元"""
+        saved_theme = self.settings_service.get("theme", self.viewmodel.current_theme)
+        if saved_theme and saved_theme != self.viewmodel.current_theme:
+            idx = self.theme_combo.findText(saved_theme)
+            if idx >= 0:
+                self.theme_combo.blockSignals(True)
+                self.theme_combo.setCurrentIndex(idx)
+                self.theme_combo.blockSignals(False)
+            self.viewmodel.set_theme(saved_theme)
 
     def _restore_auto_update_setting(self):
         """起動時に保存済み設定に基づいて自動更新を開始"""

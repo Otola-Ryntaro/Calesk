@@ -35,6 +35,31 @@ class WallpaperService:
         self.wallpaper_cache = WallpaperCache()
         logger.info("WallpaperServiceを初期化しました")
 
+    def _collect_events(self) -> tuple[list, list]:
+        """
+        壁紙生成に必要な week/today イベントを取得する。
+        マルチアカウントが有効なら統合取得、未設定時はレガシー経路へフォールバック。
+        """
+        today = datetime.now().date()
+        week_events = []
+
+        # マルチアカウント経路
+        self.calendar_client.load_accounts()
+        accounts = getattr(self.calendar_client, "accounts", {})
+        if isinstance(accounts, dict) and len(accounts) > 0:
+            week_events = self.calendar_client.get_all_events(days=7)
+        else:
+            # 既存互換: 単一アカウント認証→週イベント
+            if not self.calendar_client.authenticate():
+                raise Exception("Google Calendar API認証に失敗しました")
+            week_events = self.calendar_client.get_week_events()
+
+        today_events = [
+            e for e in week_events
+            if e.start_datetime.date() <= today <= e.end_datetime.date()
+        ]
+        return today_events, week_events
+
     def generate_wallpaper(
         self,
         theme_name: str
@@ -54,17 +79,8 @@ class WallpaperService:
         try:
             logger.info(f"壁紙生成を開始: theme={theme_name}")
 
-            # Google Calendar認証
-            if not self.calendar_client.authenticate():
-                raise Exception("Google Calendar API認証に失敗しました")
-
-            # イベント取得（1回のAPI呼び出しで今週分を取得し、今日分をフィルタ）
-            week_events = self.calendar_client.get_week_events()
-            today = datetime.now().date()
-            today_events = [
-                e for e in week_events
-                if e.start_datetime.date() <= today <= e.end_datetime.date()
-            ]
+            # イベント取得（マルチアカウント対応）
+            today_events, week_events = self._collect_events()
             logger.info(f"今日の予定: {len(today_events)}件、今週の予定: {len(week_events)}件")
 
             # テーマの設定
@@ -91,6 +107,31 @@ class WallpaperService:
 
         except Exception as e:
             logger.error(f"壁紙生成エラー: {e}")
+            raise
+
+    def generate_preview(self, theme_name: str) -> Path:
+        """
+        プレビュー専用画像を生成。
+        出力先を固定し、プレビュー操作で output/ 配下のファイルを増やさない。
+        """
+        try:
+            today_events, week_events = self._collect_events()
+            self.image_generator.set_theme(theme_name)
+
+            preview_dir = self.wallpaper_cache._cache_dir
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            preview_path = preview_dir / "preview.png"
+
+            image_path = self.image_generator.generate_wallpaper(
+                today_events,
+                week_events,
+                output_path=preview_path
+            )
+            if not image_path:
+                raise Exception("プレビュー画像の生成に失敗しました")
+            return image_path
+        except Exception as e:
+            logger.error(f"プレビュー生成エラー: {e}")
             raise
 
     def set_wallpaper(self, image_path: Path) -> bool:

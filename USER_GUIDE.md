@@ -24,7 +24,7 @@ Pythonのインストールは不要です。
 
 ### macOS
 
-1. [Releases](../../releases) ページから最新の `Calesk.app.zip` をダウンロード
+1. [Releases](https://github.com/Otola-Ryntaro/Calesk/releases) ページから最新の `Calesk-macOS.dmg` をダウンロード
 2. ZIPファイルをダブルクリックして展開
 3. `Calesk.app` を「アプリケーション」フォルダにドラッグ&ドロップ
 
@@ -52,7 +52,7 @@ bash scripts/build_app.sh
 
 ### Windows
 
-1. [Releases](../../releases) ページから最新の `Calesk-Windows.zip` をダウンロード
+1. [Releases](https://github.com/Otola-Ryntaro/Calesk/releases) ページから最新の `Calesk-Windows.zip` をダウンロード
 2. ZIPファイルを右クリック →「すべて展開」
 3. 展開されたフォルダ内の `Calesk.exe` をダブルクリックで起動
 

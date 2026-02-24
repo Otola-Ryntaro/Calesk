@@ -193,11 +193,11 @@ class MainViewModel(ViewModelBase):
 
         try:
             self._is_updating = True
+            worker_service = self._create_worker_service()
 
             # WallpaperWorkerを作成
-            # WallpaperServiceが内部でCalendarClientを使ってイベント取得
             self._current_worker = WallpaperWorker(
-                self._wallpaper_service,
+                worker_service,
                 self._current_theme
             )
 
@@ -317,9 +317,14 @@ class MainViewModel(ViewModelBase):
         try:
             # プレビュー画像を生成（壁紙は設定しない）
             # WallpaperServiceが内部でCalendarClientを使ってイベント取得
-            preview_path = self._wallpaper_service.generate_wallpaper(
-                theme_name=self._current_theme
-            )
+            if getattr(type(self._wallpaper_service), "generate_preview", None):
+                preview_path = self._wallpaper_service.generate_preview(
+                    theme_name=self._current_theme
+                )
+            else:
+                preview_path = self._wallpaper_service.generate_wallpaper(
+                    theme_name=self._current_theme
+                )
 
             logger.info(f"プレビュー画像を生成しました: {preview_path}")
             return preview_path
@@ -354,8 +359,9 @@ class MainViewModel(ViewModelBase):
             return
 
         try:
+            preview_service = self._create_worker_service()
             self._preview_worker = PreviewWorker(
-                self._wallpaper_service,
+                preview_service,
                 theme_name
             )
             self._preview_worker.signals.preview_ready.connect(self._on_preview_result)
@@ -378,6 +384,29 @@ class MainViewModel(ViewModelBase):
         self._preview_worker = None
         self.error_occurred.emit(error_message)
         logger.error(f"プレビュー生成エラー: {error_message}")
+
+    def _create_worker_service(self):
+        """
+        ワーカー専用の WallpaperService を作成する。
+        実サービス利用時はインスタンスを分離し、テスト用Mockでは既存参照を返す。
+        """
+        is_real_service = (
+            self._wallpaper_service.__class__.__name__ == "WallpaperService"
+            and self._wallpaper_service.__class__.__module__.endswith("viewmodels.wallpaper_service")
+        )
+        if not is_real_service:
+            return self._wallpaper_service
+
+        service = WallpaperService()
+        try:
+            if self._background_image_path:
+                service.set_background_image(self._background_image_path)
+            crop_position = getattr(self._wallpaper_service.image_generator, "crop_position", None)
+            if crop_position:
+                service.set_crop_position(crop_position)
+        except Exception as e:
+            logger.warning(f"ワーカー専用サービス初期化で一部設定を引き継げませんでした: {e}")
+        return service
 
     def apply_wallpaper(self) -> bool:
         """

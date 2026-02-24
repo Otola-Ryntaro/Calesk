@@ -332,7 +332,8 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
     def generate_wallpaper(
         self,
         today_events: List[CalendarEvent],
-        week_events: List[CalendarEvent]
+        week_events: List[CalendarEvent],
+        output_path: Optional[Path] = None
     ) -> Optional[Path]:
         """壁紙画像を生成"""
         try:
@@ -402,16 +403,18 @@ class ImageGenerator(EffectsRendererMixin, CardRendererMixin, CalendarRendererMi
 
             # 画像を保存
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            filename = WALLPAPER_FILENAME_TEMPLATE.format(
-                theme=self.theme_name,
-                date=datetime.now().strftime('%Y%m%d')
-            )
-            output_path = OUTPUT_DIR / filename
-            image.save(output_path)
+            final_output_path = output_path
+            if final_output_path is None:
+                filename = WALLPAPER_FILENAME_TEMPLATE.format(
+                    theme=self.theme_name,
+                    date=datetime.now().strftime('%Y%m%d')
+                )
+                final_output_path = OUTPUT_DIR / filename
+            image.save(final_output_path)
             image.close()  # 保存後は不要なので即座に解放
 
-            logger.info(f"壁紙画像を生成しました: {output_path}")
-            return output_path
+            logger.info(f"壁紙画像を生成しました: {final_output_path}")
+            return final_output_path
 
         except Exception as e:
             logger.error(f"画像生成エラー: {e}", exc_info=True)

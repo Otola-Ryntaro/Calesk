@@ -1,5 +1,5 @@
 # macOS / Windows 自動ビルドワークフロー
-# タグ push (v*) またはリリース作成時にビルドを実行し、成果物をアップロード
+# タグ push (v*) / Release 公開 / 手動実行でビルドし、タグまたはRelease時は成果物を公開
 
 name: Build & Release
 
@@ -7,6 +7,8 @@ on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -89,7 +91,7 @@ jobs:
   release:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
     steps:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4

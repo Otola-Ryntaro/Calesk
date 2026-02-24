@@ -32,7 +32,7 @@ Google Calendarと連携し、今日と今週の予定を壁紙として自動�
 
 ### かんたんインストール（Python不要）
 
-[Releases](../../releases) ページからダウンロードしてすぐに使えます。
+[Releases](https://github.com/Otola-Ryntaro/Calesk/releases) ページからダウンロードしてすぐに使えます。
 
 | OS | ダウンロードファイル | 起動方法 |
 | --- | --- | --- |
@@ -284,7 +284,7 @@ MIT License © 2026 音良林太郎
 
 ### Installation (no Python required)
 
-Download the latest release from the [Releases](../../releases) page.
+Download the latest release from the [Releases](https://github.com/Otola-Ryntaro/Calesk/releases) page.
 
 | OS | File | How to open |
 | --- | --- | --- |

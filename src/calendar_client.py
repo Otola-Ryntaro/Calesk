@@ -17,6 +17,7 @@ from googleapiclient.errors import HttpError
 
 from .config import SCOPES, CREDENTIALS_PATH, TOKEN_PATH, CALENDAR_IDS, ACCOUNTS_CONFIG_PATH, CONFIG_DIR
 from .models.event import CalendarEvent
+from .security_utils import ensure_private_dir, secure_file_permissions
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def _secure_token_file(token_path: Path) -> None:
         except Exception as e:
             logger.warning(f"Windowsパーミッション設定失敗（トークンは保存済み）: {e}")
     else:
-        os.chmod(token_path, 0o600)
+        secure_file_permissions(token_path)
 
 
 class CalendarClient:
@@ -68,6 +69,28 @@ class CalendarClient:
         # レガシー単一アカウントの色設定（accounts.jsonのlegacy_colorキーで永続化）
         self._legacy_color: str = "#4285f4"
         self._load_legacy_color()
+        # 起動時にマルチアカウント情報をロードして、UI/取得経路を同期する
+        self.load_accounts()
+
+    def _save_token_json(self, token_path: Path, token_json: str) -> bool:
+        """
+        トークンを安全に保存する。
+        親ディレクトリ作成・権限制御・失敗ログの標準化を行う。
+        """
+        try:
+            ensure_private_dir(token_path.parent)
+        except Exception as e:
+            logger.error(f"トークン保存先ディレクトリ作成失敗: {token_path.parent} ({e})")
+            return False
+
+        try:
+            with open(token_path, 'w') as token_file:
+                token_file.write(token_json)
+            _secure_token_file(token_path)
+            return True
+        except Exception as e:
+            logger.error(f"トークン保存失敗: {token_path} ({e})")
+            return False
 
     @property
     def is_authenticated(self) -> bool:
@@ -106,12 +129,8 @@ class CalendarClient:
                     )
                     self.creds = flow.run_local_server(port=0)
 
-                # トークンを保存（JSONベース）
-                with open(TOKEN_PATH, 'w') as token:
-                    token.write(self.creds.to_json())
-
-                # セキュリティ: ファイルパーミッションを所有者のみ読み書き可能に制限
-                _secure_token_file(TOKEN_PATH)
+                if not self._save_token_json(TOKEN_PATH, self.creds.to_json()):
+                    return False
                 logger.info("認証情報を保存しました")
 
             # Calendar APIサービスを構築
@@ -189,21 +208,17 @@ class CalendarClient:
 
             all_events = []
 
-            # 複数のカレンダーからイベントを取得
+            # 複数のカレンダーからイベントを取得（ページネーション対応）
             for calendar_id in CALENDAR_IDS:
                 logger.info(f"カレンダー '{calendar_id}' からイベントを取得中...")
 
-                events_result = self.service.events().list(
-                    calendarId=calendar_id,
-                    timeMin=time_min,
-                    timeMax=time_max,
-                    singleEvents=True,  # 繰り返しイベントを展開
-                    orderBy='startTime'
-                ).execute()
+                events = self._list_events_paginated(
+                    service=self.service,
+                    calendar_id=calendar_id,
+                    time_min=time_min,
+                    time_max=time_max
+                )
 
-                events = events_result.get('items', [])
-
-                # イベント情報を整形
                 for event in events:
                     event_info = self._parse_event(event, calendar_id)
                     if event_info:
@@ -336,17 +351,13 @@ class CalendarClient:
             for calendar_id in CALENDAR_IDS:
                 logger.info(f"カレンダー '{calendar_id}' から今日のイベントを取得中...")
 
-                events_result = self.service.events().list(
-                    calendarId=calendar_id,
-                    timeMin=time_min,
-                    timeMax=time_max,
-                    singleEvents=True,
-                    orderBy='startTime'
-                ).execute()
-
-                logger.debug(f"取得したイベント数: {len(events_result.get('items', []))}")
-
-                events = events_result.get('items', [])
+                events = self._list_events_paginated(
+                    service=self.service,
+                    calendar_id=calendar_id,
+                    time_min=time_min,
+                    time_max=time_max
+                )
+                logger.debug(f"取得したイベント数: {len(events)}")
 
                 for event in events:
                     event_info = self._parse_event(event, calendar_id)
@@ -389,6 +400,33 @@ class CalendarClient:
         """
         return self.get_events(days=7)
 
+    def _list_events_paginated(
+        self,
+        service,
+        calendar_id: str,
+        time_min: str,
+        time_max: str
+    ) -> List[Dict]:
+        """
+        events().list(...).execute() をページネーション込みで実行する共通処理。
+        """
+        events: List[Dict] = []
+        page_token = None
+        while True:
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy='startTime',
+                pageToken=page_token
+            ).execute()
+            events.extend(events_result.get('items', []))
+            page_token = events_result.get('nextPageToken')
+            if not page_token:
+                break
+        return events
+
     def _load_accounts_config(self) -> Dict:
         """
         accounts.json からアカウント設定を読み込む
@@ -419,12 +457,13 @@ class CalendarClient:
         """
         import json
 
-        # ディレクトリが存在しない場合は作成
-        ACCOUNTS_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # ディレクトリが存在しない場合は作成（Unix系では 700 相当）
+        ensure_private_dir(ACCOUNTS_CONFIG_PATH.parent)
 
         try:
             with open(ACCOUNTS_CONFIG_PATH, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
+            _secure_token_file(ACCOUNTS_CONFIG_PATH)
             logger.info(f"アカウント設定を保存しました: {ACCOUNTS_CONFIG_PATH}")
         except Exception as e:
             logger.error(f"アカウント設定の保存エラー: {e}")
@@ -437,7 +476,7 @@ class CalendarClient:
             str: 一意のaccount_id（例: "account_1", "account_2"）
         """
         config = self._load_accounts_config()
-        existing_ids = [acc['id'] for acc in config.get('accounts', [])]
+        existing_ids = [acc.get('id') for acc in config.get('accounts', []) if isinstance(acc, dict) and acc.get('id')]
 
         # account_1, account_2, ... の形式で採番
         counter = 1
@@ -466,7 +505,11 @@ class CalendarClient:
         ]
 
         config = self._load_accounts_config()
-        used_colors = [acc.get('color', '') for acc in config.get('accounts', [])]
+        used_colors = [
+            acc.get('color', '')
+            for acc in config.get('accounts', [])
+            if isinstance(acc, dict)
+        ]
 
         # 未使用の色を返す
         for color in default_colors:
@@ -514,7 +557,11 @@ class CalendarClient:
 
             # 重複チェック: 同じメールアドレスが既に登録されていないか
             config = self._load_accounts_config()
-            existing_emails = [a['email'] for a in config.get('accounts', [])]
+            existing_emails = [
+                a.get('email')
+                for a in config.get('accounts', [])
+                if isinstance(a, dict)
+            ]
             if email in existing_emails:
                 logger.warning(f"アカウント {_mask_email(email)} は既に登録されています")
                 return None
@@ -526,15 +573,8 @@ class CalendarClient:
             token_filename = f"token_{account_id}.json"
             token_path = CONFIG_DIR / token_filename
 
-            # ディレクトリ作成
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-            # トークンを保存
-            with open(token_path, 'w') as token_file:
-                token_file.write(creds.to_json())
-
-            # セキュリティ: パーミッション制限
-            _secure_token_file(token_path)
+            if not self._save_token_json(token_path, creds.to_json()):
+                return None
 
             # 5. デフォルト色を割り当て
             color = self._get_next_default_color()
@@ -553,6 +593,7 @@ class CalendarClient:
             config = self._load_accounts_config()
             config['accounts'].append(account_info)
             self._save_accounts_config(config)
+            self.load_accounts()
 
             logger.info(f"新しいアカウントを追加しました: {_mask_email(email)} (ID: {account_id})")
             return account_info
@@ -579,7 +620,7 @@ class CalendarClient:
             # 削除対象のアカウントを検索
             target_account = None
             for account in accounts:
-                if account['id'] == account_id:
+                if account.get('id') == account_id:
                     target_account = account
                     break
 
@@ -596,8 +637,9 @@ class CalendarClient:
                     logger.info(f"トークンファイルを削除しました: {token_filename}")
 
             # 3. accounts.jsonから削除
-            config['accounts'] = [acc for acc in accounts if acc['id'] != account_id]
+            config['accounts'] = [acc for acc in accounts if acc.get('id') != account_id]
             self._save_accounts_config(config)
+            self.load_accounts()
 
             logger.info(f"アカウントを削除しました: {account_id}")
             return True
@@ -645,6 +687,7 @@ class CalendarClient:
 
             # 保存
             self._save_accounts_config(config)
+            self.load_accounts()
             logger.info(f"アカウント {account_id} の色を変更しました: {color}")
             return True
 
@@ -695,10 +738,16 @@ class CalendarClient:
         self._expired_accounts = {}
 
         for account in config.get('accounts', []):
+            if not isinstance(account, dict):
+                logger.warning("不正なアカウントレコードをスキップしました（dictではない）")
+                continue
             if not account.get('enabled', False):
                 continue
 
-            account_id = account['id']
+            account_id = account.get('id')
+            if not account_id:
+                logger.warning("アカウントIDが欠落したレコードをスキップしました")
+                continue
             token_file = account.get('token_file', '')
 
             if not token_file:
@@ -725,10 +774,9 @@ class CalendarClient:
                     if creds and creds.expired and creds.refresh_token:
                         creds.refresh(Request())
                         # 更新したトークンを保存
-                        with open(token_path, 'w') as token:
-                            token.write(creds.to_json())
-                        # トークンファイルの権限を600に設定
-                        _secure_token_file(token_path)
+                        if not self._save_token_json(token_path, creds.to_json()):
+                            logger.warning(f"アカウント {account_id} のトークン再保存に失敗しました")
+                            continue
                     else:
                         logger.warning(f"アカウント {account_id} のトークンが無効です")
                         # 期限切れアカウントとして記録
@@ -750,7 +798,7 @@ class CalendarClient:
                     'display_name': account.get('display_name', account.get('email', ''))
                 }
 
-                logger.info(f"アカウントを読み込みました: {_mask_email(account['email'])} (ID: {account_id})")
+                logger.info(f"アカウントを読み込みました: {_mask_email(account.get('email', ''))} (ID: {account_id})")
 
             except Exception as e:
                 logger.error(f"アカウント {account_id} の読み込みエラー: {e}")
@@ -856,36 +904,26 @@ class CalendarClient:
 
         for calendar_id in CALENDAR_IDS:
             try:
-                # ページネーション処理
-                page_token = None
-                while True:
-                    events_result = service.events().list(
-                        calendarId=calendar_id,
-                        timeMin=day_start.isoformat(),
-                        timeMax=day_end.isoformat(),
-                        singleEvents=True,
-                        orderBy='startTime',
-                        pageToken=page_token
-                    ).execute()
+                items = self._list_events_paginated(
+                    service=service,
+                    calendar_id=calendar_id,
+                    time_min=day_start.isoformat(),
+                    time_max=day_end.isoformat()
+                )
 
-                    for item in events_result.get('items', []):
-                        # イベントをパース
-                        event = self._parse_event(item, calendar_id)
+                for item in items:
+                    # イベントをパース
+                    event = self._parse_event(item, calendar_id)
 
-                        if event:
-                            # アカウント情報を付与（dataclassは不変なので新しいインスタンスを作成）
-                            event = replace(
-                                event,
-                                account_id=account_id,
-                                account_color=account_color,
-                                account_display_name=account_display_name
-                            )
-                            all_events.append(event)
-
-                    # 次のページがあるか確認
-                    page_token = events_result.get('nextPageToken')
-                    if not page_token:
-                        break
+                    if event:
+                        # アカウント情報を付与（dataclassは不変なので新しいインスタンスを作成）
+                        event = replace(
+                            event,
+                            account_id=account_id,
+                            account_color=account_color,
+                            account_display_name=account_display_name
+                        )
+                        all_events.append(event)
 
             except HttpError as error:
                 logger.error(f"カレンダー {calendar_id} のAPIエラー: {error}")

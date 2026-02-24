@@ -145,9 +145,14 @@ class PreviewWorker(QRunnable):
             if self._is_cancelled:
                 return
 
-            preview_path = self._wallpaper_service.generate_wallpaper(
-                theme_name=self._theme_name
-            )
+            if getattr(type(self._wallpaper_service), "generate_preview", None):
+                preview_path = self._wallpaper_service.generate_preview(
+                    theme_name=self._theme_name
+                )
+            else:
+                preview_path = self._wallpaper_service.generate_wallpaper(
+                    theme_name=self._theme_name
+                )
 
             if not self._is_cancelled:
                 self.signals.preview_ready.emit(preview_path)

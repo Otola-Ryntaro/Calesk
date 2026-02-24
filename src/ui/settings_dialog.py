@@ -351,6 +351,8 @@ class SettingsDialog(QDialog):
         if not self._calendar_client:
             return
 
+        # 常に最新状態を読み込み
+        self._calendar_client.load_accounts()
         self.account_list_widget.clear()
 
         # マルチアカウント（accounts.json登録済み）を表示
