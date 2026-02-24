@@ -30,7 +30,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          # NOTE:
+          # macOS 15 + Python 3.13 + current PyQt6/PyInstaller の組み合わせで
+          # 起動直後に Qt permission plugin 初期化クラッシュ(SIGSEGV)が発生するため、
+          # macOS配布のみ Python 3.12 を固定する。
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
