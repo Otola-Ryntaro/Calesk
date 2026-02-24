@@ -1,140 +1,41 @@
-# macOS / Windows 自動ビルドワークフロー
-# タグ push (v*) / Release 公開 / 手動実行でビルドし、タグまたはRelease時は成果物を公開
+# CI ワークフロー（テスト実行）
+# DMG / EXE バイナリ配布は停止。Python ソースで直接実行する方式に変更。
 
-name: Build & Release
+name: CI
 
 on:
   push:
+    branches: [ main ]
     tags:
       - 'v*'
-  release:
-    types: [published]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-macos:
+  test:
     strategy:
       matrix:
-        include:
-          - runner: macos-15-intel
-            artifact_suffix: Intel
-          - runner: macos-15
-            artifact_suffix: AppleSilicon
-    runs-on: ${{ matrix.runner }}
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.11', '3.12', '3.13']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          # NOTE:
-          # macOS 15 + Python 3.13 + current PyQt6/PyInstaller の組み合わせで
-          # 起動直後に Qt permission plugin 初期化クラッシュ(SIGSEGV)が発生するため、
-          # macOS配布のみ Python 3.12 を固定する。
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
-      - name: Build macOS app
+      - name: Run tests
         run: |
-          pyinstaller Calesk.spec --clean --noconfirm
-
-      - name: Verify macOS binary architecture
-        run: |
-          file dist/Calesk.app/Contents/MacOS/Calesk
-
-      - name: Create DMG
-        run: |
-          mkdir -p dist/dmg_staging
-          cp -r dist/Calesk.app dist/dmg_staging/
-          ln -s /Applications dist/dmg_staging/Applications
-
-          hdiutil create \
-            -volname "Calesk" \
-            -srcfolder dist/dmg_staging \
-            -ov \
-            -format UDRW \
-            dist/Calesk-rw.dmg
-
-          hdiutil convert dist/Calesk-rw.dmg \
-            -format UDZO \
-            -o dist/Calesk-macOS-${{ matrix.artifact_suffix }}.dmg
-
-          rm -rf dist/dmg_staging dist/Calesk-rw.dmg
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Calesk-macOS-${{ matrix.artifact_suffix }}
-          path: dist/Calesk-macOS-${{ matrix.artifact_suffix }}.dmg
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Build Windows exe
-        run: |
-          pyinstaller Calesk_windows.spec --clean --noconfirm
-
-      - name: Create ZIP archive
-        run: |
-          Compress-Archive -Path dist\Calesk -DestinationPath dist\Calesk-Windows.zip
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Calesk-Windows
-          path: dist/Calesk-Windows.zip
-
-  release:
-    needs: [build-macos, build-windows]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
-    steps:
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Calesk-macOS-Intel
-          path: artifacts/
-
-      - name: Download macOS artifact (Apple Silicon)
-        uses: actions/download-artifact@v4
-        with:
-          name: Calesk-macOS-AppleSilicon
-          path: artifacts/
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Calesk-Windows
-          path: artifacts/
-
-      - name: Prepare legacy macOS filename
-        run: |
-          cp artifacts/Calesk-macOS-Intel.dmg artifacts/Calesk-macOS.dmg
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            artifacts/Calesk-macOS.dmg
-            artifacts/Calesk-macOS-Intel.dmg
-            artifacts/Calesk-macOS-AppleSilicon.dmg
-            artifacts/Calesk-Windows.zip
-          generate_release_notes: true
+          python -m pytest tests/ -v --tb=short -q
